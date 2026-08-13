@@ -1,0 +1,155 @@
+---
+# funC — clang-format configuration
+#
+# Requires clang-format 18+ (InsertBraces requires 15+).
+# Pin the version in the Makefile: output changes between major releases, and an
+# upgrade would otherwise reformat the whole tree in one commit and pollute
+# git blame.
+#
+# clang-format does NOT enforce naming. That is clang-tidy's
+# readability-identifier-naming check. See STYLE.md for naming rules.
+
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++03          # closest available to C99/C11 parsing behavior
+
+# --- Indentation -------------------------------------------------------------
+
+IndentWidth: 2
+UseTab: Never
+TabWidth: 2
+ContinuationIndentWidth: 4
+
+# Do not indent `case` relative to `switch`. Buys back a full level in exactly
+# the code that needs it most — codegen and the interpreter are switch-heavy.
+IndentCaseLabels: false
+IndentCaseBlocks: false
+
+IndentGotoLabels: false
+IndentPPDirectives: None
+NamespaceIndentation: None
+
+# --- Line width --------------------------------------------------------------
+
+ColumnLimit: 100
+ReflowComments: true
+
+# --- Braces ------------------------------------------------------------------
+
+# Attached braces everywhere, including function definitions (K&R / 1TBS).
+# Matches chibicc and clox.
+BreakBeforeBraces: Attach
+
+# Always brace single-statement bodies. Overrides the kernel convention
+# deliberately: Apple's `goto fail` was exactly this bug, and a project whose
+# stated principle is "make bugs unrepresentable rather than diagnosed" should
+# not leave it available.
+InsertBraces: true
+
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+
+# --- Pointers ----------------------------------------------------------------
+
+# `char *p`, not `char* p`. C's declaration syntax mirrors use: `char *p` says
+# the expression `*p` has type char. The `*` belongs to the declarator, not the
+# type — which is why `char* a, b` declares one pointer and one plain char.
+PointerAlignment: Right
+DerivePointerAlignment: false
+SpaceAroundPointerQualifiers: Default
+
+# const style: west (`const char *p`), matching libc, the kernel, chibicc, and
+# clox. Not enforceable by clang-format — see STYLE.md.
+#
+# Reading rule: const binds to what is immediately on its left; with nothing on
+# its left it binds rightward. Read declarations right to left.
+#   const char *p        pointer to const char   (pointee immutable)
+#   char *const p        const pointer to char   (pointer immutable)
+#   const char *const p  const pointer to const char
+
+# --- Alignment ---------------------------------------------------------------
+
+# Off deliberately. Column alignment looks tidy and produces diff churn: adding
+# one long name reformats every neighbouring line, so commits mix real changes
+# with alignment noise.
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros: None
+AlignConsecutiveBitFields: None
+
+AlignAfterOpenBracket: Align
+AlignEscapedNewlines: Left
+AlignOperands: Align
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+
+# --- Breaking ----------------------------------------------------------------
+
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+BreakStringLiterals: true
+Cpp11BracedListStyle: false      # `{ 1, 2 }` not `{1, 2}` — reads better in C
+
+PenaltyBreakAssignment: 100
+PenaltyBreakBeforeFirstCallParameter: 100
+PenaltyReturnTypeOnItsOwnLine: 1000
+
+# --- Spacing -----------------------------------------------------------------
+
+SpaceAfterCStyleCast: false      # `(int32_t)x`
+SpaceAfterLogicalNot: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeParens: ControlStatements   # `if (x)` but `foo(x)`
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: 1
+
+# --- Includes ----------------------------------------------------------------
+
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+
+# Priority 1: C standard headers.  Priority 2: project headers.
+# Preserve (not Regroup) keeps existing blank-line grouping intact, so a
+# deliberate separation is not silently collapsed.
+IncludeCategories:
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^".*"'
+    Priority: 2
+
+# --- Comments and misc -------------------------------------------------------
+
+FixNamespaceComments: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+SeparateDefinitionBlocks: Always
+InsertNewlineAtEOF: true
+KeepEmptyLinesAtEOF: false
+
+# Treat these as statement-like so bodies indent correctly if they ever appear
+# in list or table macros.
+ForEachMacros: []
+StatementMacros: []
+...
