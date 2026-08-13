@@ -663,6 +663,7 @@ These warnings back the rules above and are errors, not warnings.
 |---|---|
 | `-std=c23` | Pinned language standard — never left to the compiler default |
 | `-Wall -Wextra` | Baseline |
+| `-Wpedantic` | §8.1 — compiler extensions where ISO C has a standard spelling |
 | `-Wmissing-prototypes` | §4.1 — non-static function without a visible prototype |
 | `-Wstrict-prototypes` | §8.1 — `f()` instead of `f(void)`. Weakened under C23; kept for style |
 | `-Wsign-compare` | §5.2 — signed/unsigned comparison |

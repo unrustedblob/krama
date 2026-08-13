@@ -1,25 +1,34 @@
 
-CC = gcc
-CFLAGS = -std=c23 -Wall -Wextra -Wmissing-prototypes -Wstrict-prototypes -Wsign-compare -Wswitch -Wconversion -Wshadow -Wvla -Wmaybe-uninitialized -Wfree-nonheap-object
+CC ?= gcc
+
+CFLAGS = -std=c23 -g -MMD -MP -Werror -Wall -Wextra -Wpedantic \
+-Wmissing-prototypes -Wstrict-prototypes -Wsign-compare -Wswitch \
+-Wconversion -Wshadow -Wvla
+
+GCCFLAGS = -Wmaybe-uninitialized -Wfree-nonheap-object
+LLVMFLAGS = -Wsometimes-uninitialized
 
 BUILD_DIR = build
 SRC_DIR = src
 
-TARGET = ${BUILD_DIR}/cfunC
+TARGET = $(BUILD_DIR)/cfunC
 
-SRCS = $(wildcard ${SRC_DIR}/*.c)
+SRCS = $(wildcard $(SRC_DIR)/*.c)
 
 OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+	$(CC) -o $(TARGET) $(OBJS)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p ${BUILD_DIR}
-	$(CC) $(CFLAGS) -c $< -o $@
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(GCCFLAGS) -c $< -o $@
 
-.PHONY:
+
+.PHONY: all clean
 clean:
-	rm -rf build
+	rm -rf $(BUILD_DIR)
+
+-include $(OBJS:.o=.d)
