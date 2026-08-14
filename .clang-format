@@ -38,7 +38,7 @@ ReflowComments: true
 
 # Attached braces everywhere, including function definitions (K&R / 1TBS).
 # Matches chibicc and clox.
-BreakBeforeBraces: Attach
+BreakBeforeBraces: Linux #Attach
 
 # Always brace single-statement bodies. Overrides the kernel convention
 # deliberately: Apple's `goto fail` was exactly this bug, and a project whose

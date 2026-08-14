@@ -1,6 +1,6 @@
 # funC — C Coding Standards
 
-**Version:** 1.0 · **Date:** 2026-08-12
+**Version:** 1.1 · **Date:** 2026-08-14
 **Status:** Final for milestone 1. Amend by addition when a rule is actually needed.
 **Target standard:** C23 (`-std=c23`, pinned)
 
@@ -19,7 +19,7 @@ Enforced by `.clang-format`. Do not hand-format against it.
 |---|---|
 | Indent | 2 spaces, never tabs |
 | Column limit | 100 |
-| Braces | Attached, same line, including function definitions |
+| Braces | Linux, same line, except function definitions |
 | Single-statement bodies | Always braced |
 | `case` labels | Not indented relative to `switch` |
 | Pointer | `char *p` — bound to the declarator |
@@ -60,6 +60,10 @@ The "clockwise/spiral rule" is wrong for some declarations. Use right-to-left, o
 
 - **Length tracks scope.** A three-line scope wants `i`, `p`, `n`. Anything crossing a function
   boundary or living in a struct must explain itself. Long names in tight scopes are noise.
+- **Use word separation.** Every word boundary gets an underscore, including inside an abbreviation:
+  `file_sz`, not `filesz`. Abbreviating shortens a word; it does not remove the boundary. This is
+  what keeps `file_sz`, `read_sz` and `src_len` legible as one scheme rather than three private
+  ones. Approved short forms are in §2.4.
 - **Module prefix on every non-static function.** C has no namespaces; the prefix is the only
   mechanism. `arena_alloc`, `lex_next`, `parse_expr`.
 - **`static` functions take no module prefix.** Internal linkage means there is nothing to collide
@@ -72,6 +76,11 @@ The "clockwise/spiral rule" is wrong for some declarations. Use right-to-left, o
 - **Never begin an identifier with `_`.** Reserved for the implementation.
 - **Functions are verb phrases.** `parse_expr`, not `expr_parser`.
 - **Predicates read as questions.** `is_keyword`, `has_span`. Return `bool`.
+- **Contrast is a naming property.** Where two names in one scope hold the same kind of value, they
+  differ in the dimension that distinguishes them and are identical everywhere else. `file_sz` and
+  `read_sz` are one word apart, and that word is the whole difference. `fsz` and `sz` fail this:
+  they differ by abbreviation depth, so the unqualified one reads as the default when it is in fact
+  the more specific of the two.
 - **Keep a small consistent vocabulary.** Once `tok` always means the current token, reading gets
   faster. Prefer a short conventional name used everywhere to a descriptive name used once.
 
@@ -94,6 +103,67 @@ Exception: function pointer types, where `struct` does not apply and a typedef i
 form.
 
 Note that the reference codebases (chibicc, clox) do typedef. Translate while reading.
+
+### 2.4 Approved abbreviations
+
+An abbreviation is a word, not a compression. Shorten a word to the form the codebase already uses
+everywhere, or write it out — never truncate ad hoc at the point of use.
+
+This table is the record of what has been agreed, rather than a set of examples to extend by
+analogy. Any short form used should be here first — adding one is a small change and a welcome one.
+`_count` is spelled out precisely so that the natural guess at `_cnt` has an answer waiting.
+
+**Suffixes.** A measurement's units are part of its name.
+
+| Suffix | Means | Example |
+|---|---|---|
+| `_sz` | size in **bytes** | `file_sz`, `block_sz` |
+| `_len` | length in **elements or characters** | `src_len`, `ident_len` |
+| `_cap` | allocated capacity, in the same unit as its `_len` | `buf_cap` |
+| `_count` | a number of discrete things — spelled out, never `cnt` | `node_count`, `param_count` |
+| `_idx` | index into a named thing | `line_idx` |
+| `_ptr` | pointer, only where a non-pointer of the same name is also in scope | `span`, `span_ptr` |
+
+`_sz` and `_len` are deliberately not synonyms. A lexer holds both for the same string constantly,
+and collapsing them loses the distinction exactly where it costs most.
+
+`_ptr` is for disambiguation only. C declarations already show the star, so the suffix is noise on a
+type that only ever exists behind a pointer — `struct Arena` is opaque, so the variable is `arena`,
+never `arena_ptr`.
+
+**Bare short forms.** Accepted as written, no qualifier needed.
+
+| Form | Means |
+|---|---|
+| `buf` | buffer |
+| `fp` | `FILE *` stream |
+| `src` / `dst` | source / destination |
+| `str` | string |
+| `fmt` | format string |
+| `tmp` | scratch value, dead within a few lines |
+| `err` | error value |
+| `i`, `j`, `n`, `p` | tight-scope index, count, pointer (§2.1) |
+
+**Project vocabulary.** These mean one thing here, always.
+
+| Form | Means |
+|---|---|
+| `tok` | the current token |
+| `kind` | an enum tag field |
+| `span` | a source range |
+| `diag` | a diagnostic |
+| `expr`, `stmt`, `decl` | the three AST families |
+| `lhs`, `rhs` | binary node children |
+| `pos` | byte offset into the source |
+
+**Not accepted.** Bare `sz` — it names no subject. `cnt`. `buff`. `f` for a stream. Any two-word
+name without its underscore. Any single-letter name outside the four listed above.
+
+### 2.5 Identifiers do not appear in user-facing text
+
+A diagnostic names the thing, not the variable holding it. `"could not open input file"`, never
+`"fp could not be opened"`. Identifiers are an implementation detail, and a rename should not be
+able to change what a user reads.
 
 ---
 
@@ -651,6 +721,8 @@ internal invariant means silently continuing in a corrupted state. Both are revi
 `static_assert` is a third thing again — a compile-time check with no runtime existence. It is not
 gated by `NDEBUG` and is not related to either row above.
 
+Diagnostic text follows §2.5: name the thing, not the variable.
+
 Details of the diagnostic mechanism: **TBD**.
 
 ---
@@ -712,6 +784,9 @@ Quick pass before requesting review.
 - [ ] Every header compiles standalone; own header included first in its `.c`
 - [ ] No `default:` in a switch over a project enum
 - [ ] No identifier ending `_t` or beginning `_`
+- [ ] Every short form in an identifier appears in the §2.4 table
+- [ ] Same-kind values in one scope are named contrastively
+- [ ] No identifier names appear in user-facing text
 - [ ] `size_t` for counts and indices; fixed-width types only for funC values
 - [ ] All struct initializers are designated
 - [ ] Nothing initialized solely to silence an uninitialized warning
