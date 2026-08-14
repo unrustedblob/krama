@@ -7,19 +7,24 @@
 
 ## Current
 
-**Milestone:** 1 — single `main`, three scalar types, arithmetic, `@print`
-**Working on:** —
-**Blocked on:** —
-**Last green:** — *(what builds and passes right now)*
-**Next up:** —
+**Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
-**Deliberately incomplete** — *stubs and placeholders, so they are not reported as bugs:*
+**Working on:** Arena
+
+**Blocked on:** -
+
+**Last green:** Builds clean under all flags; reads and dumps test.fc
+
+**Next up:** Arena and associated interface.
+
+**Deliberately incomplete** — 
 
 | Location | State | Intent |
 |---|---|---|
 | — | — | — |
 
 ---
+
 
 ## Log
 
@@ -31,28 +36,6 @@ Keep it short. Three sentences per field is plenty. The failures are the most
 valuable part: they are what redirects review and what workout exercises get
 built from.
 -->
-
-### YYYY-MM-DD — [short title]
-
-**Did.** What was built or changed.
-
-**Worked.** What is now verifiably functioning, and how it was verified — tests passing, manual
-run, sanitizer clean.
-
-**Didn't.** What was attempted and abandoned, and why. Dead ends, approaches that turned out wrong,
-things that compiled but behaved unexpectedly. *Do not skip this field.* It is the most useful
-signal in the document.
-
-**Friction.** Concepts that felt shaky rather than merely unfamiliar. C-specific stumbling —
-pointer arithmetic, alignment, ownership, string handling, macro behavior, build errors that took
-too long to decode.
-
-**Stubbed.** Anything left deliberately incomplete this session. Mirror it into the Current table
-above; remove it from there when filled in.
-
-**Next.** The single next thing.
-
----
 
 ### 2026-08-12 — Spec closed, pre-implementation
 
@@ -73,6 +56,50 @@ construction.
 
 ---
 
+### 2026-08-14 - First commit submitted, implementation started
+
+**Did.**
+
+1. Coding standards setup, document STYLE.md - may be progressively updated if needed.
+2. Simple `main()` function written. It opens the file (currently stored in variable in source), reads it into a buffer and dumps output to `stdout`
+
+**Worked.**
+
+1. `goto` ladder correct on first attempt.
+2. `exit_status` initialized as 1 and set to 0 once at the end.
+3. `ferror` and `feof` handling on `fread`.
+
+**Didn't.**
+
+| Review Pass | Issue # | Bug | Resolution |
+|---|---|--- | ---|
+| 1 | [#1](https://github.com/unrustedblob/funC/issues/1) | Heap overread as `buf` was not `NUL` terminated | `buf` is allocated `file_sz + 1` bytes and last byte is set to  `NUL` |
+| 1 | [#2](https://github.com/unrustedblob/funC/issues/2) | Missed `goto cleanup_file` on `fseek` failure | Included `goto` |
+| 2 | [#3](https://github.com/unrustedblob/funC/issues/3) | Setting `buf[file_sz]` to `NUL` before checking `malloc` status | Moved it after the `malloc` check. Consequence of "rushed update" related to bug:[#1](https://github.com/unrustedblob/funC/issues/1) |
+| 2 | [#4](https://github.com/unrustedblob/funC/issues/4) | Incorrect format string `%ld` used for `size_t` | Missing `-Wformat-signedness` flag. Updated to `%zu`, the correct format string. **Note** Review claimed -Wformat alone would catch it, that was wrong; identified by leaving the incorrect string in to test it. |
+| 3 | N/A - Style | No `void` in `main()` as parameter | C23 standard allows this, but as stated in STYLE.md - 8.1, `void` is kept for consistency. Updated parameter `void` |
+| 3 | [#5](https://github.com/unrustedblob/funC/issues/5) | Empty file reported as error `malloc(0)` can return `NULL` | Fixed incidentally by adding 1 to the `file_sz` when calling `malloc` |
+
+**Friction.**
+
+Makefile - `CC ?= gcc` is inert. The build ran cc. Attempt to get it working by using below:
+
+```make
+ifeq ($(origin CC),default)
+  CC = gcc
+endif
+```
+
+This did not work. For now, using `override CC = gcc` but this will ignore any command line variables for `CC` - so this needs to be resolved before we need to try multiple compilers.
+
+**Stubbed.** - n/a
+
+**Next.**
+
+1. Start work on the Arena and its API.
+ 
+---
+
 ## Conventions
 
 - **Dates, not session numbers**, in the log. Session numbers live in `DECISIONS.md`.
@@ -85,3 +112,5 @@ construction.
   Keeping the domain separate keeps practice code out of the transpiler.
 - **Update Current before pushing a repomix export.** It is the first thing read during review, and
   it is what prevents deliberate stubs from being flagged as bugs.
+
+
