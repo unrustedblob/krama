@@ -1,12 +1,11 @@
-
-CC ?= gcc
+override CC = gcc
 
 CFLAGS = -std=c23 -g -MMD -MP -Werror -Wall -Wextra -Wpedantic \
 -Wmissing-prototypes -Wstrict-prototypes -Wsign-compare -Wswitch \
 -Wconversion -Wshadow -Wvla
 
-GCCFLAGS = -Wmaybe-uninitialized -Wfree-nonheap-object
-LLVMFLAGS = -Wsometimes-uninitialized
+GCCFLAGS = -Wmaybe-uninitialized -Wfree-nonheap-object -Wformat-signedness
+# LLVMFLAGS = -Wsometimes-uninitialized
 
 BUILD_DIR = build
 SRC_DIR = src
