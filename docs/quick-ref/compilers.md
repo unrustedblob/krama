@@ -4,8 +4,8 @@ Organised by pipeline stage. Every shape sketch is pseudocode.
 
 ## Contents
 
-**Scanning:** maximal munch · keyword post-filtering · perfect hashing · string interning · token
-lookahead buffer
+**Scanning:** maximal munch · trivia attachment · keyword post-filtering · perfect hashing · string
+interning · token lookahead buffer
 **Parsing:** cascading recursive descent · Pratt parsing · left-recursion elimination · panic-mode
 recovery · synchronization sets · error productions
 **AST and positions:** source span tracking · line table + binary search · index-based node
@@ -40,6 +40,45 @@ Its famous failure case is C++'s `>>` in nested templates, where maximal munch g
 answer and the standard had to carve out an exception.
 
 **Related:** longest-match rule, lexer lookahead, trie-based tokenization.
+
+---
+
+## Trivia attachment
+
+**Problem:** comments and whitespace must not reach the parser — a comment can appear between any
+two tokens, so letting one into the stream means every lookahead site must tolerate it, and the one
+site you forget is a bug that surfaces when someone comments in an unusual place. But discarding
+them in the scanner destroys them permanently, and some tools need them back.
+
+**Shape:**
+
+```
+the scanner recognises comments and whitespace (this stays a lexical decision)
+rather than discarding them, it attaches each run to a neighbouring token as trivia
+each token carries leading trivia and trailing trivia
+the parser matches only on real tokens and never sees trivia at all
+```
+
+The token stream can then reproduce the source byte for byte. The resulting tree is called
+**lossless** or **full-fidelity**, and is a *concrete* syntax tree rather than an abstract one.
+Splitting leading from trailing trivia is what keeps an end-of-line comment on its own line instead
+of migrating to the top of the next statement.
+
+**Read:** Roslyn coined the term and documents the design well. rust-analyzer and Swift's libSyntax
+are the same approach.
+
+**Cost:** bookkeeping on every token, plus an arbitration rule for who owns an ambiguous run of
+blank lines between two constructs.
+
+**When to bother:** a compiler that only emits code should discard in the scanner and skip this
+entirely. Build it if a formatter, a doc generator, or an editor refactoring is ever wanted — those
+are impossible to retrofit once comments are gone, which is the real reason the choice matters
+early. Note that round-trip *structural* testing is not a reason: structure survives discarding
+comments.
+
+**Related:** the abstract/concrete distinction here is the same one that makes a pretty-printer
+re-derive parentheses from precedence rather than recover them from the tree, since an AST discards
+grouping exactly as it discards comments.
 
 ---
 

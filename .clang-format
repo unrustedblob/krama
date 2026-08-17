@@ -15,10 +15,10 @@ Standard: c++03          # closest available to C99/C11 parsing behavior
 
 # --- Indentation -------------------------------------------------------------
 
-IndentWidth: 2
+IndentWidth: 8
 UseTab: Never
-TabWidth: 2
-ContinuationIndentWidth: 4
+TabWidth: 8
+ContinuationIndentWidth: 8
 
 # Do not indent `case` relative to `switch`. Buys back a full level in exactly
 # the code that needs it most — codegen and the interpreter are switch-heavy.

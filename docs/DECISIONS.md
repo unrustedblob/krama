@@ -33,6 +33,10 @@ place.
 | D-016 | `@` prefix denotes the intrinsic namespace | Decided | 05 |
 | D-017 | Single unary minus, not recursive | Decided | 06 |
 | D-018 | Milestone restrictions live in the checker, not the grammar | Decided | 06 |
+| D-019 | Transpiler source targets C23 | Decided | 07 |
+| D-020 | Emitted C standard | Deferred | 07 |
+| D-021 | String interning for identifiers | Deferred | 07 |
+| D-022 | Macros permitted for what only macros can do | Decided | 08 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -90,6 +94,173 @@ affordable.
 functions. **Planned migration, with a twist:** when refactoring to Pratt, *keep the old parser* and
 differential-test the two on randomly generated expressions, asserting identical ASTs. A
 verification harness falls out of a refactor that was happening anyway.
+
+---
+
+### D-019 — Transpiler source targets C23
+
+**Status:** Decided · **Session:** 07 · **Spec:** n/a (implementation, not language)
+
+**Decided.** The transpiler is compiled with `-std=c23`, pinned explicitly in the Makefile.
+
+**Rejected.**
+- *C99.* Would require the negative-array-size idiom for compile-time assertions, `<stdbool.h>`,
+  `#define`/`enum` workarounds for scalar constants, and `__attribute__` extensions for
+  `noreturn`.
+- *C11.* Gets `_Static_assert` and anonymous unions but not `constexpr`, keyword `static_assert`,
+  fixed-underlying-type enums, or standard attributes.
+- *Leaving the standard unpinned.* A compiler upgrade would then silently change language semantics
+  and break build reproducibility — the same argument as pinning the clang-format version.
+
+**Why.** C23's additions remove sharp edges the coding standards were otherwise written to work
+around, rather than adding conveniences. Concretely: `constexpr` repeals the "const is not a
+constant expression" wart; keyword `static_assert` needs no header; fixed-underlying-type enums
+shrink high-volume struct tags; standard attributes replace compiler extensions; `bool` needs no
+include.
+
+**Consequences.**
+- Toolchain floor: GCC 14+ or Clang 18+.
+- STYLE.md §5.3, §5.4, §6.2, §6.4, §7.3, §8.1 are written against C23 and would need reverting
+  if this changed.
+- clangd and clang-format support for the newest syntax may lag; verify editor integration before
+  relying on a feature.
+- `-Wstrict-prototypes` loses its correctness role, since `f()` and `f(void)` are equivalent in C23.
+- **Open verification:** fixed-underlying-type enums may weaken `-Wswitch` exhaustiveness checking.
+  Test before adopting `enum TokenKind : uint8_t`. If the warning stops firing, keep the plain enum.
+
+**Independent of D-020.** This governs only what compiles the transpiler. It places no constraint
+on what the transpiler emits.
+
+---
+
+### D-020 — Emitted C standard
+
+**Status:** Deferred · **Session:** 07 · **Spec:** §13 item 3
+
+**Deferred.** No decision until a genuine fork appears in generated code.
+
+**The question.** What standard must a *user's* compiler accept to build funC output? This is a
+portability promise made to users and is unrelated to D-019.
+
+**Expected forks.** `_Bool` / `<stdbool.h>`, anonymous structs and unions, `_Static_assert`.
+`_Generic` is explicitly *not* a fork — spec §9.4 rules it out on other grounds.
+
+**Why deferred.** Milestone 1 emits only `<stdint.h>`, `<stdio.h>`, `int32_t`, `float`, `uint8_t`,
+`printf`, and the trap helpers. All of that is valid C99. Nothing forces the choice yet.
+
+**Revisit when.** The first emitted construct that requires C11 or later. Likely trigger: `bool`
+arriving in funC (phase 2), which raises `_Bool` versus an `int`-based encoding.
+
+---
+
+### D-021 — String interning for identifiers
+
+**Status:** Deferred · **Session:** 07 · **Spec:** n/a (implementation)
+
+**Deferred.** Milestone 1 keeps identifiers as `{ptr, len}` slices into the source buffer (D-004).
+No intern pool.
+
+**The question.** Should each unique identifier spelling get one canonical allocation, so that
+comparing two identifiers is pointer equality rather than length-plus-`memcmp`?
+
+**Rejected as a motivation.** Interning *keywords* up front to replace scan-time keyword
+recognition. Spec §3.3 post-filters `IDENT` against 8 keywords — a length check and a handful of
+`memcmp`s. Interning performs equivalent work under a different name, and the real win in that path
+is already captured: once keywords are distinct `TokenKind` values, the parser compares integers.
+
+**Why it will be worth doing later.**
+- **Symbol lookup becomes pointer comparison.** The type checker resolves every `VarRef` against a
+  scope; interned, that is `a == b`. With nested scopes, functions, and struct fields this is the
+  checker's hot path.
+- **Uniqueness becomes a structural invariant**, not a discipline. Tables keyed on names get a
+  free perfect hash — the pointer itself.
+- **Names acquire a home for attached data.** `is_keyword`, later `is_builtin`, a precomputed hash,
+  and a cached mangled name all live on the entry. Range predicates over the token enum do not
+  scale past keywords: `@print` / `@cast` / `@sizeof` are not a contiguous range of anything.
+
+**Revisit when.** The type checker gains a real symbol table with nested scopes. That is the point
+at which pointer-equality lookup stops being theoretical.
+
+**Consequences when adopted.**
+- Partially supersedes D-004. Slices remain — spans need them — but *identity* moves to the pool.
+- **Spans must stay on the token, not on the interned entry.** One entry for `x`, but the `x` on
+  line 4 and the `x` on line 9 need different spans. Easy to conflate.
+- The arena (D-003) is the right substrate: interned strings never die. Hash buckets are the
+  growable part and stay separately allocated.
+- Adds a hash table and one allocation per unique spelling — structure the current design does not
+  have.
+
+**Target design.** Clang's `IdentifierTable`: one entry per unique spelling, keywords pre-populated
+with their token kind stored on the entry, so scanning becomes "intern, then read the kind off the
+result" with no separate keyword check at all. The argument for interning is not that it is faster
+than what milestone 1 does — it is that it collapses two lookups into one.
+
+**Reference.** *Crafting Interpreters* ch. 20, closing section (clox interns every string).
+Clang Internals Manual, Lexer and Preprocessor Library. Lisp symbols / obarray as the idea in its
+original form.
+
+---
+
+### D-022 — Macros permitted for what only macros can do
+
+**Status:** Decided · **Session:** 08 · **Spec:** n/a (implementation) — STYLE.md §8.4
+
+**Decided.** STYLE.md gains §8.4, naming the five jobs that have no non-macro spelling: include
+guards and conditional compilation, `#`/`##`, call-site capture via `__FILE__` / `__LINE__` /
+`__func__`, taking a type as an argument, and a value the preprocessor itself must read. A macro
+doing one of these names which, in a comment; a macro that cannot name one should have been a
+`static inline` function. §7.1's clause about `#define` gains a scope qualifier.
+
+**Rejected.**
+
+- *Leaving it unwritten.* No rule is smaller than a rule, and nothing in the guide actually banned
+  macros. But it restricted `#define` in two places (§5.4, §7.1) and permitted it nowhere, and
+  silence in a rules document is read as prohibition. §7.1's "textual, unscoped, untyped, and
+  invisible in a debugger" is an argument about naming values; lifted out of context it reads as a
+  general indictment, and out of context is how a rule gets read during review a year later.
+- *A general prohibition with narrow exceptions.* The honest written form of what was previously
+  assumed. Rejected because the premise does not hold: what C23 removed the need for is the
+  macro-as-scalar-constant, and `static inline` had already displaced the macro-as-function long
+  before that. Neither touches the five remaining jobs, so a prohibition would be a rule whose
+  exceptions are its entire content.
+- *`constexpr` tables as a way to avoid macro-built tables.* Considered directly, as an alternative
+  route to the enum-to-string problem §7.6 defers X-macros for. **Tested and rejected on the
+  language, not on taste:** C23 requires a `constexpr` object of pointer type to be initialized with
+  a null pointer constant, so `constexpr const char *names[]` does not compile; the 2D form
+  `constexpr char names[][N]` compiles but silently drops the NUL when a string exactly fills its
+  row, with no warning under `-Wall -Wextra -Wpedantic`; and elements of a `constexpr` aggregate are
+  not constant expressions, so there is no compile-time indexing to be had. `static const char
+  *const` remains correct and is what §5.4 already blesses. Verified on GCC 13; re-verify on the
+  GCC 14+ floor.
+- *A new top-level section.* Placed where it belongs topically — near §5 or §7 — it would renumber
+  sections that D-019 cites by number. Appended after §14 it would sit orphaned past the review
+  checklist. §8.4 puts it beside §3.7 and §8.1, next to the thing a macro is most often mistaken
+  for.
+
+**Why.** The restriction was written from an assumption that macros are a footgun as a class. They
+are not; two specific uses were, and both have replacements. The rule that actually discriminates is
+not "avoid macros" but "name the job" — the five listed jobs have no alternative spelling, and
+anything else does, which makes the list itself the test.
+
+**Consequences.**
+
+- §7.1 amended to carry its own scope. §5.4 and §7.1's substance are untouched: both concern the
+  macro-as-constant, which stays replaced.
+- The two items §13 defers to "before the lexer" — the assertion mechanism and the diagnostic sink —
+  now have their permission in place. Both need the caller's `__FILE__` and `__LINE__`, which forces
+  a macro; that no longer has to be relitigated while designing them.
+- New review item: every macro's comment names its job. §14 checklist gains a line.
+- STYLE.md 1.1 → 1.2.
+- Does not reopen D-019. C23 is what makes `constexpr` available for the constants; the macro jobs
+  listed here predate it and are unaffected by the standard target.
+
+**Revisit if.** A sixth job appears that the list does not cover. The list is the rule, so a macro
+nobody can file under one of the five is either a mistake or evidence the list is incomplete — and
+which of those it is has to be argued, not assumed.
+
+**Reference.** Gustedt, *Modern C*, which treats macros as ordinary tools with a naming discipline
+rather than as a hazard. Linux's `__user` / `__iomem` and Microsoft's SAL annotations as the prior
+art for annotation macros, and the reason they are worth little without a tool that reads them.
 
 ---
 

@@ -1,6 +1,7 @@
 # Folders
 build/*
 .refs/*
+.sparring/*
 
 # Prerequisites
 *.d

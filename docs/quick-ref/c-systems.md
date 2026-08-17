@@ -6,11 +6,19 @@ pseudocode; translate it yourself.
 ## Contents
 
 - Alignment rounding
+- Allocate-or-die (`xmalloc`)
+- Always-on assertion
 - Arena / bump allocation
+- Atomic file replacement
 - Exhaustive `switch` without `default`
 - Fat pointer / string slice
 - Flexible array member
+- Designated initializers for sparse tables
+- `do { } while (0)` statement macro
 - `goto` cleanup ladder
+- Mark / release (arena savepoint)
+- Overflow-safe fit test
+- Size classes and slab allocation
 - Static assertion
 - Table-driven dispatch
 - Tagged union
@@ -40,6 +48,92 @@ two lines and explain why. Chapter on alignment in any of the systems-programmin
 undefined-behaviour side.
 
 **Related:** padding, `max_align_t`, over-aligned types, false sharing.
+
+---
+
+## Allocate-or-die (`xmalloc`)
+
+**Problem:** an allocation failure has exactly one sensible response in this program — say so and
+stop — but the return value forces every call site to write the branch anyway. A hundred `if (!p)`
+blocks, all identical, all untested, guarding a condition that on a batch process with a modern
+allocator essentially never fires.
+
+**Shape:**
+
+```
+xmalloc(size):
+    p = malloc(size)
+    if p is null:
+        message to stderr
+        exit non-zero          // not abort — there is no bug to inspect
+    return p                   // never null; callers do not check
+```
+
+The convention is a promise in the signature: the function either returns valid memory or does not
+return. Once that holds, "can this be null" stops being a question anyone asks, and the header
+comment says so explicitly so no one adds a defensive check later.
+
+**When it does not apply:** a library, which cannot know whether its caller wants to retry, degrade,
+or die, and must hand the failure up. This is an *application* convention. The distinction is the
+whole argument — propagating in an application means every function grows a branch to serve a
+policy that was never in doubt.
+
+Keep it separate from an assertion failure, which reports a bug and wants `abort()` and a core
+dump. Out of memory is an environment failure: the input is fine, the program is fine, the machine
+said no. Same three lines on screen, different exit mechanism, and conflating them costs you the
+distinction exactly when you need it.
+
+**Read:** GNU libiberty's `xmalloc`; git's `xmalloc` in `wrapper.c`, which also handles the
+`malloc(0)` case explicitly. Most compilers ship one under some name.
+
+**Related:** allocate-or-die's cousin `xstrdup`; the arena, which absorbs the same decision one
+level down so that individual node allocations never face it.
+
+---
+
+## Always-on assertion
+
+**Problem:** `assert` from `<assert.h>` compiles to nothing under `NDEBUG`. Release builds are
+exactly where a corrupted internal invariant is most expensive and least observable, and that is
+precisely where the standard mechanism removes the check.
+
+**Shape:**
+
+```
+ASSERT(cond, msg):
+    do:
+        if not (cond):
+            assert_failed(#cond, msg, __FILE__, __LINE__, __func__)
+    while (0)
+
+assert_failed(...):            // [[noreturn]]
+    message to stderr
+    abort()                    // SIGABRT, core dump, gdb lands at the fault site
+```
+
+Four things this shape is doing, three of which force the macro:
+
+- `#cond` stringifies the condition, so the report names the invariant rather than saying an
+  assertion failed.
+- `__FILE__` / `__LINE__` / `__func__` expand at the *call site*. A function can only ever report
+  its own position.
+- The handler is `[[noreturn]]`, which keeps flow analysis accurate — no spurious
+  maybe-uninitialized or missing-return warnings after an assertion.
+- `do { } while (0)` makes the expansion one statement, so an unbraced `if`/`else` around it still
+  parses.
+
+**Cost, accepted deliberately:** the check exists in every build. That is an AND and a
+perfectly-predicted branch, which is nothing against real work — but it means the mechanism is for
+genuine invariants, not for things you would merely like to double-check. If one ever lands
+somewhere hot enough to measure, hoist the check rather than weakening the mechanism.
+
+**Read:** Linux's `BUG_ON` and `WARN_ON`; LLVM's `llvm_unreachable`, which is instructive because it
+does the *opposite* under `NDEBUG` — it becomes an optimizer hint that the path is impossible, which
+turns a caught bug into undefined behaviour. Knowing that trade exists is the point.
+
+**Related:** static assertion (compile-time, no runtime existence at all), and the
+diagnostic-versus-assertion split — an assertion means *this program* is wrong, a diagnostic means
+the *input* is wrong, and substituting either for the other is a defect.
 
 ---
 
@@ -87,7 +181,112 @@ Arena Allocator*. GNU `obstack` is the venerable implementation.
 server that must reclaim.
 
 **Related:** region-based memory management (the academic name), pool allocator (fixed-size cousin),
-scratch arenas, `alloca`.
+mark / release below, which is how scratch arenas reclaim without a `free`, and `alloca`.
+
+---
+
+## Atomic file replacement
+
+**Problem:** a program that writes its output directly to the target path leaves a partial file
+behind when it dies mid-write. What remains looks like a valid artifact and is not, so whatever
+consumes it next fails confusingly — a truncated generated `.c` produces a syntax error rather than
+an obvious "the generator crashed".
+
+**Shape:**
+
+```
+write everything to a temporary in the same directory
+flush and close it
+rename(temp, target)          // atomic; the target is the old file or the new one, never a mix
+```
+
+The rename must be on the same filesystem, which is why the temporary goes in the target's directory
+rather than `/tmp`. POSIX guarantees the replacement is atomic with respect to other processes: a
+concurrent reader sees one version or the other.
+
+If the data must survive a power loss rather than merely a crash, `fsync` the file before the rename
+and the *directory* after it. For a compiler writing build output, crash-safety is the requirement
+and the syncs are usually skipped as too expensive for what they buy.
+
+**Why it beats a cleanup path:** unlinking the partial file in an error handler only works for
+failures you routed through the handler. It does nothing for a signal, an `abort()`, or a
+power cut. The temp-and-rename structure makes partial output unrepresentable rather than cleaned
+up after.
+
+**Read:** the POSIX `rename()` specification on atomicity; how editors implement save-without-
+corruption; SQLite's atomic-commit documentation for the same idea taken much further.
+
+**Related:** write-ahead logging; the general pattern of making an invalid intermediate state
+unobservable rather than transient.
+
+---
+
+## Designated initializers for sparse tables
+
+**Problem:** a table parallel to an enum — kind-to-string for diagnostics, a format table, a
+precedence table — written positionally. It is correct on the day it is written and silently wrong
+the day someone reorders the enum or inserts a member in the middle. Nothing warns; every lookup
+just returns its neighbour's value.
+
+**Shape:**
+
+```
+static const char *const names[] = {
+    [TOK_FN]    = "fn",
+    [TOK_LET]   = "let",
+    [TOK_IDENT] = "identifier",
+};
+static_assert(sizeof names / sizeof names[0] == TOK_LAST_VALUE + 1, "table drifted");
+```
+
+The index is written at each entry, so order in the source stops mattering and reordering the enum
+cannot misalign anything. Omitted entries are null rather than garbage, which is a checkable
+condition rather than a silent misread.
+
+Two things it does not do, both worth knowing:
+
+- **It does not catch a missing entry.** Adding an enum member leaves a null hole; nothing warns.
+  The length assertion catches the case where the array is sized off the enum, which is why the two
+  are used together rather than separately.
+- **It does not make the elements constant expressions.** In C, a `constexpr` object of aggregate
+  type is not usable in a constant expression, and a `constexpr` object of pointer type must be
+  initialized with a null pointer constant — so an array of string pointers cannot be `constexpr`
+  at all. `static const char *const` is the correct spelling here and lands in `.rodata` regardless.
+
+**Read:** C's initialization clause on designated initializers; the Linux kernel's syscall tables,
+which are the canonical large-scale use.
+
+**Related:** X-macro, which solves the missing-entry half by generating enum and table from one
+list; table-driven dispatch, which is what the table usually feeds; static assertion.
+
+---
+
+## `do { } while (0)` statement macro
+
+**Problem:** a multi-statement macro that is not wrapped breaks at the call site in ways the author
+never sees. Braces alone are not enough — `if (x) MACRO(); else ...` becomes a syntax error, because
+the trailing semicolon after a brace-block terminates the `if`. Naked statements are worse: only the
+first one ends up inside the `if`.
+
+**Shape:**
+
+```
+#define MACRO(a) do { first(a); second(a); } while (0)
+```
+
+The loop runs once and costs nothing — every compiler folds it away. What it buys is that the
+expansion is a single *statement* which requires a terminating semicolon, so the macro behaves
+exactly like a function call in every syntactic position.
+
+Use it whenever the macro expands to statements. A macro that expands to an *expression* wants
+parentheses instead, not this — and a macro that could have been a `static inline` function wants
+neither.
+
+**Read:** any kernel header; the C FAQ entry on multi-statement macros, which walks through the
+`if`/`else` failure directly.
+
+**Related:** the single-evaluation rule (each parameter used once, or say so in the comment);
+statement expressions (`({ ... })`) as the GCC extension that returns a value, and is not ISO C.
 
 ---
 
@@ -190,6 +389,126 @@ one universally accepted use of `goto` in C.
 
 ---
 
+## Mark / release (arena savepoint)
+
+**Problem:** a phase allocates temporaries — a scratch buffer per node, a working list per pass —
+whose lifetime ends long before the arena's. From the arena they are never reclaimed, so peak
+memory becomes the sum of every temporary ever made rather than the largest live set. From
+`malloc` they reintroduce exactly the ownership bookkeeping the arena was adopted to abolish.
+
+**Shape:**
+
+```
+mark(arena):
+    return {current block, current cursor}    // a value; nothing is mutated
+
+release(arena, mark):
+    // every pointer handed out since the mark is dead after this line
+    restore the arena's current block and cursor from the mark
+    for each block chained after the mark's block:
+        either unlink and free it, or retain it with its cursor reset for reuse
+```
+
+The cursor alone is not a mark once the arena chains blocks — restoring it without also restoring
+the block silently strands or reuses the wrong region. Marks nest **LIFO**: releasing an outer mark
+invalidates every inner one, and there is no mechanism that will tell you it happened.
+
+Wellons' variant avoids the explicit release entirely: pass the arena **by value**, so the callee
+bumps a private copy of the header and the caller's cursor is untouched when it returns. The mark is
+the copy and the release is the `return`, which makes the lifetime visible in the signature —
+`f(Arena *perm, Arena scratch)` says which allocations survive. It needs a header cheap enough to
+copy and a matching block-chaining policy.
+
+**Read:** Ryan Fleury, *Untangling Lifetimes: The Arena Allocator*, where this is the temp/scratch
+arena. Chris Wellons, *Arena allocator tips and tricks*, for the by-value form. gingerBill's
+*Memory Allocation Strategies* part 3 arrives at the same place from the other direction and calls
+the result a stack allocator. GNU `obstack` has had it as `obstack_free` since the 1980s.
+
+**Cost:** it puts back a lifetime rule the plain arena had removed — a pointer's validity now
+depends on a scope that is not visible at the use site, and ASan cannot see the violation because
+nothing was freed. Adopt it when temporaries are a measured share of peak memory, not on
+speculation.
+
+**Related:** LIFO / stack discipline, which is the constraint marks impose and the reason the next
+allocator up the family is called a stack allocator; `alloca`, the compiler-provided version of the
+same shape with no way to bound it; region inference (MLKit), where a compiler places the marks for
+you.
+
+---
+
+## Overflow-safe fit test
+
+**Problem:** the natural way to ask whether a request fits is `used + size > cap`. On unsigned
+types that addition wraps, so a sufficiently large `size` produces a small sum and the test reports
+that it fits. The allocator then hands out a pointer past the end of its own block, and the failure
+appears somewhere else entirely.
+
+**Shape:**
+
+```
+// given the invariant used <= cap
+if (size > cap - used)  → does not fit
+```
+
+The subtraction cannot wrap, because the invariant guarantees a non-negative result. Nothing is ever
+added, so nothing can exceed the type's range. Where padding is involved, subtract it too, in two
+steps rather than one sum:
+
+```
+if (padding > cap - used)            → no room even to align
+if (size > cap - used - padding)     → no room for the object
+```
+
+The invariant is what makes it safe, so the invariant is worth asserting rather than assuming.
+
+**Pointer form:** the same defect appears as `if (p + size > end)`, which is worse than an
+overflow — in C, *forming* a pointer more than one past the end of an object is undefined
+behaviour, whether or not it is dereferenced. The correct spelling computes the remaining span
+instead: `if ((size_t)(end - p) < size)`. This is the concrete reason allocators that track a
+`size_t` offset rather than a pointer have less to get wrong.
+
+**Read:** CERT C INT30-C on unsigned wraparound; any allocator's size check, all of which are
+written subtractively once someone has been bitten.
+
+**Related:** alignment rounding, which has the same shape of hazard one level down — computing the
+padding rather than rounding an address up, so nothing can wrap near the top of the address space.
+
+---
+
+## Size classes and slab allocation
+
+**Problem:** an arena never reuses memory, which is correct when everything shares one lifetime and
+wrong when objects die individually. But a general-purpose allocator carries per-object headers,
+free-list searching, and fragmentation to serve request sizes that, in practice, are drawn from a
+handful of fixed values.
+
+**Shape:**
+
+```
+pool:         one free list, one fixed object size, allocation is a pop
+size classes: several pools at fixed sizes; round the request up to the nearest class
+slab:         one cache per type, objects pre-constructed, reuse preserves initialized state
+```
+
+The progression is worth having straight, because the three names get used interchangeably and are
+not the same thing. A **pool** serves one size. **Size classes** (informally, buckets) are several
+pools with rounding, which is the jemalloc and tcmalloc structure. A **slab** is per-*type* rather
+than per-size, and its distinguishing feature is that a freed object keeps its constructed state so
+reuse skips re-initialization — Bonwick's original point, and the reason the kernel uses it for
+inodes and dentries.
+
+All three trade the arena's bargain — no reuse, no bookkeeping, one teardown — for per-object reuse
+at the cost of a free list. That is a different bargain, not a better one. Reach for it when objects
+demonstrably die individually, not when the arena feels wasteful.
+
+**Read:** Bonwick, *The Slab Allocator: An Object-Caching Kernel Memory Allocator* (USENIX 1994);
+the jemalloc paper for size classes at scale.
+
+**Related:** arena / bump allocation, free list, mark / release — four points on the same axis,
+trading reuse granularity against bookkeeping.
+
+---
+
 ## Static assertion
 
 **Problem:** your code assumes a struct is 16 bytes, or that an enum fits in a byte, or that the
@@ -203,10 +522,14 @@ assert a compile-time-constant condition at file scope
 the compiler refuses to build if it is false
 ```
 
-**Read:** `_Static_assert` in C11, `static_assert` via `<assert.h>`. Pre-C11 the idiom was declaring
-an array with a negative size when the condition failed — worth recognising in old code.
+**Read:** `static_assert` is a keyword in C23 — no underscore, no include, and the message operand
+is optional. Two older spellings are worth recognising rather than writing: `_Static_assert` with
+`static_assert` as an `<assert.h>` macro over it (C11), and, pre-C11, declaring an array with a
+negative size when the condition failed.
 
-**Related:** compile-time invariants, `sizeof` checks, layout assertions.
+**Related:** compile-time invariants, `sizeof` checks, layout assertions. Distinct from both a
+runtime `assert` and a diagnostic — it has no runtime existence at all, so `NDEBUG` does not reach
+it and there is nothing to gate.
 
 ---
 

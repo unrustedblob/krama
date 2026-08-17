@@ -1,6 +1,6 @@
 # funC — C Coding Standards
 
-**Version:** 1.1 · **Date:** 2026-08-14
+**Version:** 1.2 · **Date:** 2026-08-15
 **Status:** Final for milestone 1. Amend by addition when a rule is actually needed.
 **Target standard:** C23 (`-std=c23`, pinned)
 
@@ -469,7 +469,8 @@ Do not enable `-Wpadded` globally — it fires on nearly every struct and gets t
 ### 7.1 Enums, not `#define`
 
 Token kinds, node kinds, type kinds and similar closed sets are enums. `#define` constants are
-textual, unscoped, untyped, and invisible in a debugger.
+textual, unscoped, untyped, and invisible in a debugger. This is a rule about naming values, not
+about macros generally — see §8.4.
 
 The tag field is the enum type, never `int`:
 
@@ -554,6 +555,28 @@ context type itself is normally opaque (§3.6).
 ### 8.3 Ownership
 
 Every function that takes or returns a pointer must have documented ownership. See §9.5.
+
+### 8.4 Macros
+
+Macros are permitted for the work only a macro can do. `constexpr` replaced the macro-as-constant
+(§5.4) and `static inline` replaced the macro-as-function (§3.7). Nothing replaced the rest, and
+these remain correct:
+
+- Include guards and conditional compilation (§3.3).
+- Token pasting and stringification. `#` and `##` have no functional equivalent.
+- Capturing the call site. `__FILE__`, `__LINE__` and `__func__` expand where they are written, so a
+  helper that reports its *caller's* position cannot be a function.
+- Taking a type as an argument.
+- A value the preprocessor itself must read. `#if` cannot see a `constexpr` object.
+
+A macro doing one of these says which, in a comment. A macro that cannot name one should have been a
+`static inline` function.
+
+When writing one: parenthesise the body and every parameter use; evaluate each parameter exactly
+once, or state in the comment that it does not. `SCREAMING_SNAKE` (§2) is what tells the call site
+it is not a function — do not spend that signal on a macro that had no need of it.
+
+See `DECISIONS.md` D-022.
 
 ---
 
@@ -798,4 +821,5 @@ Quick pass before requesting review.
 - [ ] Every pointer-returning function documents lifetime as arena / borrowed / owned
 - [ ] No comment restates what the code already says
 - [ ] Every file opens with a one-line module comment
+- [ ] Every macro names, in a comment, which of the §8.4 jobs it does
 - [ ] Every committed TODO references a decision ID or milestone
