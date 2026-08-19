@@ -1,6 +1,6 @@
 # funC — C Coding Standards
 
-**Version:** 1.2 · **Date:** 2026-08-15
+**Version:** 1.4 · **Date:** 2026-08-15
 **Status:** Final for milestone 1. Amend by addition when a rule is actually needed.
 **Target standard:** C23 (`-std=c23`, pinned)
 
@@ -17,7 +17,7 @@ Enforced by `.clang-format`. Do not hand-format against it.
 
 | | |
 |---|---|
-| Indent | 2 spaces, never tabs |
+| Indent | 8 spaces, never tabs |
 | Column limit | 100 |
 | Braces | Linux, same line, except function definitions |
 | Single-statement bodies | Always braced |
@@ -174,6 +174,7 @@ able to change what a user reads.
 ```
 README.md          project overview
 PROJECT.md         current state and work log
+CLAUDE.md          assisstant interaction riles - see D-023
 Makefile
 src/               all sources and headers, flat
 tests/             .func / .expected pairs and the driver
