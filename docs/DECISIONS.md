@@ -37,6 +37,7 @@ place.
 | D-020 | Emitted C standard | Deferred | 07 |
 | D-021 | String interning for identifiers | Deferred | 07 |
 | D-022 | Macros permitted for what only macros can do | Decided | 08 |
+| D-023 | Assistant interaction rules live in CLAUDE.md | Decided | 09 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -261,6 +262,72 @@ which of those it is has to be argued, not assumed.
 **Reference.** Gustedt, *Modern C*, which treats macros as ordinary tools with a naming discipline
 rather than as a hazard. Linux's `__user` / `__iomem` and Microsoft's SAL annotations as the prior
 art for annotation macros, and the reason they are worth little without a tool that reads them.
+
+---
+### D-023 — Assistant interaction rules live in `CLAUDE.md`
+
+**Status:** Decided · **Session:** 09 · **Spec:** n/a (process, not language or implementation)
+
+**Decided.** A root-level `CLAUDE.md` states how the assistant participates: a default of not
+writing this project's code, an escalation ladder from prose to generic C, four named roles
+(`/mentor`, `/teacher`, `/reviewer`, `/toolman`), and a single-response override (`/BURNOUT`). It
+carries no language or style rules of its own; it points at the four existing documents and states
+their precedence. Design deliberation stays outside the repository — `CLAUDE.md` governs the coding
+sessions, not the decisions that feed them.
+
+**Rejected.**
+
+- *No file; paste the documents into each session.* Zero drift, since there is only ever one copy of
+  each rule. Rejected on cost and on fidelity: the paste is lossy in practice — `PROJECT.md`
+  **Current** is the thing most often left out, and it is the thing that prevents a deliberate stub
+  from being reported as a bug.
+- *One instruction — "act as a mentor" — with no roles.* Less machinery, and machinery that is never
+  used is worse than none. Rejected because the modes want opposite defaults: mentoring withholds
+  the answer to make it be derived, review withholds the answer to make it be found, and teaching
+  gives the answer and then tests it. A single mode cannot be all three, and in practice collapses
+  to whichever the last message sounded like.
+- *Making `CLAUDE.md` self-contained by restating the spec and STYLE rules inside it.* Genuinely
+  attractive: the file would work standing alone, with no assumption about what else got read.
+  Rejected because two documents asserting the same rule diverge on the first amendment to either,
+  and the divergence is found by whoever follows the stale copy. This is the failure the precedence
+  clause at the top of this file already exists to prevent; adding a fifth authority would make that
+  clause harder to state, not easier.
+- *A blanket prohibition on generated code with no override.* Cannot be eroded, which is its whole
+  merit. Rejected because a rule with no relief valve is abandoned wholesale under pressure rather
+  than suspended for one response — and the abandonment is silent, where a `/BURNOUT` is a legible
+  event. It also discards the signal: the request marks fatigue, which is information worth having.
+- *Permitting test code to be generated,* on the grounds that tests are scaffolding around the
+  artifact rather than the artifact. Rejected: spec §11 makes the test strategy a first-class part
+  of the project, and the differential harness in §11.2 is a harder design problem than most of the
+  transpiler. Handing it over would remove the most instructive work in milestone 1.
+
+**Why.** The scarce resource in this project is not correct code — that is a search away — but the
+experience of producing it. A rule that only says "teach, don't tell" is unenforceable because every
+individual snippet looks justifiable in the moment. The ladder makes the concession ordinal instead:
+each rung must be earned, so drifting to finished code requires visibly skipping steps rather than
+just being helpful. The roles then exist because withholding is correct in three different ways and
+naming which one is in force is cheaper than inferring it every turn.
+
+**Consequences.**
+
+- `STYLE.md` §3.1's layout gains `CLAUDE.md`; STYLE.md 1.3 → 1.4.
+- Any language or style rule that appears in `CLAUDE.md` is a defect in `CLAUDE.md`, not a second
+  opinion. It is a behaviour file and holds no authority over the code.
+- Two venues, deliberately: design argument outside the repository, coding sessions inside it. A
+  decision reached in a coding session is not decided until it lands here as an entry.
+- Adding a role or a rung is an edit to `CLAUDE.md` **and** a superseding entry here. The set is
+  small on purpose.
+- `/toolman` is scoped to `tools/`, which makes `STYLE.md` §3.1's stdlib-only rule load-bearing for
+  a second reason — it now also bounds what the assistant may write.
+- The `technique-index` skill's guardrails are incorporated by reference rather than restated, for
+  the same reason the spec is.
+
+**Revisit if.** The project stops being primarily a learning exercise — at that point the ladder is
+pure cost and should be dropped rather than tuned. Or if a fifth role is wanted twice, which is
+evidence the four are cutting the space wrongly rather than that one is missing.
+
+**Reference.** The `technique-index` skill's own guardrails ("name it; do not build it", pseudocode
+first) as prior art for the same constraint arrived at independently.
 
 ---
 
