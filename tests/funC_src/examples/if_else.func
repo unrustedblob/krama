@@ -1,0 +1,21 @@
+import ...
+
+fn main(): i32 {
+        const x: i32 = 10;
+        const y: i32 = read_from_stdin();
+
+        let z: i32 = if (x > y) {
+          give x - y;
+        } else {
+          give y - x;
+        };
+
+        if (z > 3) {
+                @print("funC +++\n");
+        } else if (z > 1) {
+                @print("funC +\n");
+        } else {
+                @print("No funC\n");
+        }
+        return 0;
+}

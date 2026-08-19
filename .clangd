@@ -1,0 +1,5 @@
+if:
+  PathMatch: .*\\.h
+CompileFlags:
+  Add: [-xc, -std=c23]
+

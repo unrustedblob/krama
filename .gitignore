@@ -3,6 +3,9 @@ build/*
 .refs/*
 .sparring/*
 
+# Asisstants
+CLAUDE.md
+
 # Prerequisites
 *.d
 

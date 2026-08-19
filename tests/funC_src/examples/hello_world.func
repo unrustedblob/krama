@@ -1,0 +1,5 @@
+import ...
+
+fn main(): i32 {
+        @print("Hello World!\n");
+}

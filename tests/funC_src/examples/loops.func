@@ -1,0 +1,28 @@
+import ...
+
+fn main(): i32 {
+        const x: i32 = 42;
+        let y: i32 = 0;
+
+        # Form 1: Infinite loop
+        for {
+                set y+= 2;
+                if (y < 42) {
+                        break;
+                }
+                @print("y = {y}");
+        }
+
+        # Form 2: Conditional exit
+        for (y < 42) {
+                set y += 2;
+                @print("y = {y}");
+        }
+
+        # Form 3: Range For
+        for (y in range(y, 42)) {
+                @print("y = {y}");
+        }
+
+        return 0;
+}

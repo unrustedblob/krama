@@ -4,16 +4,165 @@ Organised by pipeline stage. Every shape sketch is pseudocode.
 
 ## Contents
 
+**Language design:** structured program theorem · labelled break and labelled blocks · iterator
+protocol vs. built-in range · refutable vs. irrefutable patterns
 **Scanning:** maximal munch · trivia attachment · keyword post-filtering · perfect hashing · string
 interning · token lookahead buffer
 **Parsing:** cascading recursive descent · Pratt parsing · left-recursion elimination · panic-mode
-recovery · synchronization sets · error productions
+recovery · synchronization sets · error productions · non-associative precedence · expression
+restrictions
 **AST and positions:** source span tracking · line table + binary search · index-based node
 references · side table for annotations
-**Checking:** symbol table with scope chain · bidirectional type checking
-**Codegen:** constant folding · `#line` directives
+**Lowering and IR:** desugaring · A-normal form / three-address code
+**Type systems:** unit type · bottom type · strong typedef · bitcast · arbitrary-width integer types
+**Checking:** symbol table with scope chain · bidirectional type checking · subsumption and least
+upper bound · normal completion and reachability
+**Codegen:** constant folding · `#line` directives · zero-sized types and unit erasure
 **Testing:** differential testing · property-based testing · delta debugging · random program
 generation · small-step operational semantics
+
+---
+
+# Language design
+
+## Structured program theorem (Böhm–Jacopini)
+
+**Problem:** "which control-flow constructs does the language actually need?" reads like a taste
+question. It is not — the minimal set is a published result, which turns the shopping list for a
+core language into a fact rather than an argument.
+
+**Shape:**
+
+```
+sequence + selection + iteration  ==  any computable function
+
+everything else is derived:
+    for, do/while, switch, break, continue, early return
+```
+
+The practical use is as a stopping rule. A core with one selection form and one iteration form is
+known to be complete, so anything further is added for ergonomics and can be argued about on those
+terms alone.
+
+**Read:** Böhm and Jacopini, *Flow Diagrams, Turing Machines and Languages with Only Two Formation
+Rules*, CACM 1966. Knuth's *Structured Programming with go to Statements* (1974) is the essential
+counterweight and the more useful of the two for anyone actually designing a language. Dijkstra's
+*Go To Statement Considered Harmful* is the polemic that made the result famous and says the least.
+
+**Cost:** the construction can require introducing extra state variables, so "expressible" and
+"expressible without contortion" are different claims. The theorem is cited as licence to ban `goto`
+far more often than it supports — that reading is the index's warning, not the paper's argument.
+
+**Related:** reducible control flow graphs, single-entry single-exit regions, Knuth's counterargument.
+
+---
+
+## Labelled break and labelled blocks
+
+**Problem:** `break`, `continue`, and any block-value keyword bind to the nearest enclosing
+construct. When the exit or the value belongs to an *outer* one — a search three levels deep that
+has found its answer — nearest-enclosing cannot express it, and the workaround is a flag variable
+tested at every level on the way out.
+
+**Shape:**
+
+```
+outer: {
+    for (x in xs) {
+        for (y in ys) {
+            if (match(x, y)) { break outer (x, y); }
+        }
+    }
+    give none;
+}
+
+the label names a target; the exit is non-local
+every block between here and the target has its remainder made unreachable
+```
+
+**Read:** Zig's labelled blocks — `blk: { break :blk value; }` — are the most complete version,
+since one mechanism carries both the exit and the value. Rust's labelled `break 'a value` is the
+same idea restricted to loops and `loop` blocks. Java (JLS §14.15) has labelled break for loops
+without the value half, which is the older and narrower form.
+
+**Cost:** two decisions that nearest-enclosing never raised. Labels occupy a namespace that must be
+kept separate from variables, which is why Zig and Rust both mark them syntactically rather than
+letting a bare identifier serve. And a non-local exit feeds the reachability predicate, so it cannot
+land before that analysis exists.
+
+**Related:** normal completion analysis, structured non-local exit, `goto` with a restricted target.
+
+---
+
+## Iterator protocol versus built-in range
+
+**Problem:** `for x in thing` has to decide what `thing` may be. Either a fixed set of built-in
+types the compiler knows how to walk, or anything implementing an interface — and the second answer
+cannot be taken before the language has interfaces, generics, and a way to name an associated
+element type.
+
+**Shape:**
+
+```
+built-in:   for x in xs
+              compiler knows arrays, slices, maps, strings, and nothing else
+              no user extension; the loop is a primitive
+
+protocol:   for x in xs   desugars to
+              it = xs.into_iter()
+              loop { match it.next() { Some(x) => body, None => break } }
+              any type implementing the trait works
+```
+
+**Read:** the Go spec's "For statements with range clause" is the built-in answer, unchanged and
+uncontroversial for fifteen years. The Rust reference on `IntoIterator` gives the protocol answer
+with the desugaring written out explicitly — worth reading as an instance of the sugar/core split as
+much as of iteration.
+
+**Cost:** the protocol answer drags in its entire dependency chain — traits or interfaces, generics,
+and a monomorphisation or boxing strategy for them. That is a compilation-architecture decision, not
+a loop feature. The built-in answer forecloses nothing: a protocol can be added later and the
+built-in types retrofitted onto it.
+
+**Related:** monomorphisation, associated types, desugaring, external vs. internal iteration.
+
+---
+
+## Refutable versus irrefutable patterns
+
+**Problem:** `let (a, b) = pair` and `let (a, 0) = pair` look like one feature and are two. The
+first cannot fail — every pair has two components. The second can, and admitting it obliges the
+language to say what happens on failure, plus exhaustiveness checking wherever that failure is meant
+to be handled rather than fatal.
+
+**Shape:**
+
+```
+irrefutable — always matches, legal in a binding position
+    let (a, b) = pair
+    for (k, v) in map
+    fn f((x, y): Point)
+
+refutable — may fail, legal only where failure has somewhere to go
+    match v { Some(x) => ..., None => ... }
+    if let Some(x) = v { ... }
+
+rule: binding positions accept irrefutable patterns only
+      exhaustiveness checking applies to refutable positions
+```
+
+**Read:** the Rust reference, "Patterns", §refutability, states the split as a normative rule and is
+the clearest short treatment. Wadler's *Views: A way for pattern matching to cohabit with data
+abstraction* sets out the tension between patterns and encapsulation. Maranget's *Compiling Pattern
+Matching to Good Decision Trees* is the implementation, and carries the exhaustiveness algorithm.
+
+**Cost:** destructuring arrives looking free — a tuple type and a binding form. What follows is not:
+refutable patterns, match expressions, exhaustiveness checking over user types, and a diagnostic
+that can say *which* case is missing. Adopt destructuring on its own merits, never as a side effect
+of a loop header or a multiple binding.
+
+**Related:** exhaustiveness checking, decision tree compilation, `switch` without `default` as the
+degenerate case.
 
 ---
 
@@ -338,6 +487,72 @@ Add them in response to real confusion, not speculatively.
 
 ---
 
+## Non-associative precedence (`%nonassoc`)
+
+**Problem:** `a < b < c` is legal C and means something almost nobody intends. A precedence level
+written as a loop admits chains; the same level written as an optional single rejects them at parse
+time, before types are involved at all.
+
+**Shape:**
+
+```
+left-associative — a loop
+    additive   = mul { ( "+" | "-" ) mul }
+
+non-associative — an optional single
+    comparison = additive [ ( "<" | ">" | "<=" | ">=" ) additive ]
+```
+
+The technique generalises past comparison: any operator whose chained form is meaningless rather
+than merely surprising belongs at a non-associative level. Narrowing the production makes the bug
+unrepresentable instead of diagnosable.
+
+**Read:** POSIX yacc's `%nonassoc` declaration is where the term comes from and is worth reading
+alongside `%left` and `%right` to see the three as one mechanism. The Rust reference — "comparison
+operators cannot be chained" — is the modern statement. Python deliberately does the opposite, where
+`a < b < c` means `a < b and b < c`, and is the dissent worth understanding before choosing.
+
+**Cost:** the rejected expression is *type-correct* in a language with `bool`, so the diagnostic has
+to explain the design rather than report a mismatch.
+
+**Related:** single non-recursive unary prefix, precedence declarations, ambiguity resolution by
+production narrowing.
+
+---
+
+## Expression restrictions
+
+**Problem:** a language with brace-delimited blocks and brace-delimited struct literals cannot parse
+`if x { }` unambiguously — `x { }` may be a struct literal with the `if` still awaiting its block,
+or `x` may be the condition and `{ }` the block. The grammar is genuinely ambiguous, not merely
+awkward, and lookahead does not help because both parses are complete.
+
+**Shape:**
+
+```
+the ambiguity
+    if point { }        # `point {}` a struct literal? or `point` the condition?
+
+fix A — restrict the expression grammar in that position
+    if_expr = "if" expr_no_struct_literal block
+
+fix B — require parentheses, and the ambiguity cannot arise
+    if_expr = "if" "(" expr ")" block
+```
+
+**Read:** the Rust reference, "Expressions", on the struct-expression restriction, and the Go spec's
+parsing-ambiguity paragraph under "Composite literals". Both languages took fix A and both document
+it as a wart. Swift has the same collision with trailing closures.
+
+**Cost:** fix A makes the expression grammar context-dependent — an expression legal in one position
+is illegal in another, and every error message then has to explain that. Fix B costs two characters
+and is what C already did by accident.
+
+**Related:** dangling else, grammar ambiguity, context-dependent productions, offside rule
+collisions.
+
+---
+
 # AST and positions
 
 ## Source span tracking
@@ -451,6 +666,253 @@ dissolves.
 
 ---
 
+# Lowering and IR
+
+## Desugaring (sugar/core split, lowering)
+
+**Problem:** every convenient surface form — compound assignment, `for`, `else if` chains — adds a
+case to the type checker, the interpreter, the code generator, and the written semantics. The cost
+of a feature is not one case; it is feature count times pass count.
+
+**Shape:**
+
+```
+core  = the minimal set of forms the semantics has rules for
+sugar = everything else, defined as a rewrite into core
+
+lower(node):
+    CompoundAssign(place, op, rhs) -> Assign(place, Binary(op, Read(place), lower(rhs)))
+    ForLoop(init, cond, step, body) -> Seq(init, While(cond, Seq(body, step)))
+    _ -> node, children lowered
+
+pipeline: parse -> lower -> check -> { codegen, interpret }
+```
+
+Where the rewrite happens is its own decision. In the parser it is cheapest and least visible; as a
+separate pass between parse and check it costs a tree walk and keeps phase separation honest.
+
+**Read:** the rustc dev guide on HIR lowering is the most legible modern implementation. GHC's
+desugarer and Simon Peyton Jones's *The Implementation of Functional Programming Languages* are the
+tradition it comes from. Landin coined "syntactic sugar" in *The Next 700 Programming Languages*.
+
+**Cost:** two failure modes, both silent. A rewrite that duplicates a subexpression changes how many
+times it evaluates — `a[f()] += 1` is the canonical case. A rewrite that synthesises nodes destroys
+the spans diagnostics point at, so the user gets an error on an operator they never typed. Both are
+handled at the rewrite site or not at all.
+
+**Related:** macro expansion, HIR, Core, source-to-source translation, hygiene.
+
+---
+
+## A-normal form / three-address code
+
+**Problem:** a nested expression tree gives every analysis and optimisation pass an arbitrary shape
+to walk. Normalising so that every operation takes only trivial operands — variables and literals —
+gives each pass one uniform form to handle.
+
+**Shape:**
+
+```
+a + b * c
+
+becomes
+
+t0 = b * c
+t1 = a + t0
+```
+
+**Read:** Flanagan, Sabry, Duba and Felleisen, *The Essence of Compiling with Continuations* (1993),
+for ANF. The Dragon Book §6.2 for three-address code, which is the same idea in classical imperative
+dress. SSA is what results from additionally numbering each assignment uniquely.
+
+**Cost:** named, real, and not for a C backend — C accepts nested expressions, so normalising before
+emission buys nothing and costs readability in the generated output. It becomes necessary when
+targeting an IR that only takes atomic operands, such as QBE or LLVM. The *style* it describes —
+temporaries over nesting, statements over expressions — is worth keeping in generated C even when
+the form is not, because it is what keeps the output debuggable.
+
+**Related:** SSA, continuation-passing style, quadruples, temporaries.
+
+---
+
+# Type systems
+
+## Unit type (nullary tuple, `()`)
+
+**Problem:** does an expression that produces nothing have *some* type, or *no* type? The answer
+decides whether the language needs one `if` or two. If "no value" is itself a type with exactly one
+value, then statement-position `if` is just an expression of that type and no second construct is
+required.
+
+**Shape:**
+
+```
+unit is a type with exactly one value, carrying zero bits
+
+    type(block with no value-producing terminator) = Unit
+    type(if c { } else { })                        = Unit
+    type(while c { })                              = Unit
+
+without it, every construct needs two forms:
+    one usable as a statement, one usable as an expression
+```
+
+**Read:** the Rust reference on the unit type `()`, with the fact that Rust has exactly one `if` as
+the payoff. ML's `unit` and Haskell's `()` are the same construct in the tradition it comes from.
+Pierce, *Types and Programming Languages*, §11.2, treats it as a base case when building a type
+system up from nothing.
+
+**Cost:** the type must be erased at code generation or it costs real loads and stores, and it is
+unspellable in a target language whose `void` is uninhabited — `let x: unit` has no direct C
+translation. Easily confused with the bottom type, which has zero values rather than one and behaves
+oppositely in a checker.
+
+**Related:** zero-sized types, bottom type, `void` as a return type only, tuple arity.
+
+---
+
+## Bottom type (uninhabited type, `never`, `!`)
+
+**Problem:** a branch that diverges — returns, aborts, loops forever — produces no value, but a type
+checker comparing branch types demands one. Without a type for "control does not reach here", every
+`if` with an early return in one arm is rejected, and the language grows an ad-hoc exception in the
+typing rule instead.
+
+**Shape:**
+
+```
+type(return e) = Never
+type(abort())  = Never
+
+Never is a subtype of every type, so it disappears at the join:
+    join(Never, T) = T
+    join(T, Never) = T
+    join(T, U)     = error unless T == U
+
+a value of Never cannot be constructed, so the subtyping is sound:
+the coercion site is unreachable by construction
+```
+
+**Read:** the Rust reference on the never type `!`, and RFC 1216 for the argument that introduced it.
+Kotlin's `Nothing`, TypeScript's `never` and Scala's `Nothing` are the same construct. Pierce,
+*Types and Programming Languages*, §15.4, on Bot.
+
+**Cost:** it is the one subtyping relation a language otherwise free of subtyping must admit, so
+"no coercions anywhere" stops being literally true — the honest statement becomes "no coercions
+except from the type that has no values". Distinct from the unit type: unit has one value and is
+erased at codegen, Never has none and is unreachable. Conflating them yields a checker that accepts
+genuinely dead code.
+
+**Related:** normal completion analysis, divergence, subtyping, uninhabited vs. zero-sized.
+
+---
+
+## Strong typedef (distinct type versus alias)
+
+**Problem:** two things with identical representation and different meaning — a byte and a small
+number, a user ID and a post ID, metres and feet — are interchangeable to the compiler if one is an
+alias for the other. Every confusion between them is then a bug the type system was in a position to
+catch and declined to.
+
+**Shape:**
+
+```
+alias:    B refers to the same type as A
+          a B is accepted anywhere an A is expected — no checking gained
+
+distinct: B has A's representation and its own identity
+          conversion in either direction is explicit and named
+          B's legal operations are declared independently of A's
+
+the test: does f(a) compile, where f expects B and a is an A?
+          alias -> yes.  distinct -> no.  That is the whole difference.
+```
+
+**Read:** C++17's `std::byte` (proposal P0298, Macintosh) is the best-documented modern instance,
+and its rationale — that `char` was doing double duty as character and as raw memory — is the
+canonical argument for the split. Ada's derived types (RM §3.4) are the oldest thorough version.
+Haskell's `newtype` and Rust's tuple-struct wrapper are the functional spelling. Go's
+`type byte = uint8` is the deliberate counterexample.
+
+**Cost:** every boundary crossing becomes an explicit conversion, and the verbosity lands hardest in
+exactly the code that crosses most — parsing, serialisation, hashing. VHDL has enforced this split
+between `std_logic_vector` and `numeric_std` since the early nineties, so the verdict is in: users
+complain about the conversion noise and nobody proposes removing it.
+
+**Related:** newtype, phantom types, units of measure, nominal vs. structural typing.
+
+---
+
+## Bitcast (type punning, `transmute`)
+
+**Problem:** two conversions look alike and are not. One preserves the *value* and may change the
+bits — integer widening, float to integer. The other preserves the *bits* and changes the meaning —
+a float to its IEEE-754 pattern. They fail differently: the first can lose information or trap, the
+second can only be wrong about intent. One spelling for both hides which risk was taken.
+
+**Shape:**
+
+```
+cast(T, x)     value-preserving
+               representation may change; may trap or lose precision
+               widths may differ
+
+bitcast(T, x)  representation-preserving
+               bits retained, meaning changes; never traps
+               REQUIRE sizeof(T) == sizeof(typeof(x))
+```
+
+The width requirement is the entire safety story. Without it the operation reads or invents bytes
+that were never there.
+
+**Read:** Zig separates `@bitCast` from `@intCast` and `@floatCast` and is the cleanest reference.
+LLVM IR distinguishes the `bitcast` instruction from the converting casts for the same reason.
+Rust's `std::mem::transmute` documentation is worth reading for the opposite lesson — it does not
+stop at width equality and is correspondingly notorious.
+
+**Cost:** in C the portable spelling is `memcpy`, not a pointer cast. Casting a `float *` to
+`uint32_t *` and dereferencing violates strict aliasing and is undefined however universally it
+appears in real code; the union trick is legal in C99 and not in C++. A language offering this needs
+a builtin precisely because the obvious implementation is wrong.
+
+**Related:** strict aliasing, `memcpy` as the portable pun, representation vs. value conversion.
+
+---
+
+## Arbitrary-width integer types
+
+**Problem:** a bit-level slice five bits wide has no type in a language whose integers come in
+8/16/32/64. Storing it in the next size up with the high bits zeroed puts the real width back in the
+programmer's head, which is the untyped knowledge the type system was meant to capture.
+
+**Shape:**
+
+```
+types u1 .. uN and i1 .. iN, width carried in the type
+
+    slice(x: b32, 3..8) : b5
+
+width arithmetic in the checker:
+    concat(b3, b5) : b8
+
+packed structs fall out:
+    struct { flag: b1, kind: b3, len: b12 }   # 16 bits, layout stated not implied
+```
+
+**Read:** the Zig language reference on integers, which has `u1` through `u65535` as first-class
+types. LLVM's Language Reference on the `iN` type is where the lowering strategy is visible. VHDL
+and Verilog have had this natively for decades because hardware description requires it.
+
+**Cost:** codegen must lower non-power-of-two widths to something the machine has, meaning masking
+and shifting on every load and store. C's bitfields are the cautionary version — the feature without
+the type system — which is why bit order and packing are implementation-defined there and nobody
+relies on them portably. Bit numbering must also be defined by significance rather than memory
+order, or the feature becomes endian-dependent.
+
+**Related:** bitfields, packed structs, bit slicing, endianness, `iN` lowering.
+
+---
+
 # Checking
 
 ## Symbol table with scope chain
@@ -507,6 +969,83 @@ readable. The technique underpins most modern type checkers.
 
 ---
 
+## Subsumption and least upper bound
+
+**Problem:** two branches produce different types and the expression needs one. Either the checker
+demands they match exactly and rejects, or it computes a common supertype and accepts. This looks
+like a convenience question and is not — it decides whether an expression's type can be read off
+what is written, or must be inferred from context.
+
+**Shape:**
+
+```
+exact match:   type(if c {A} else {B}) = A, and error unless A == B
+
+subsumption:   push the expected type down into each arm
+               ask "is this acceptable here", not "do these agree"
+
+LUB / join:    synthesise the smallest type both arms fit
+               join(i32, f32) = f32?  i32|f32?  error?
+
+the tell: under LUB, deleting a type annotation elsewhere can change
+          this expression's type
+```
+
+The explicit alternative is injection — the programmer names a constructor, both arms genuinely have
+the wider type already, and exact match applies unchanged.
+
+**Read:** Pierce, *Types and Programming Languages*, §15.3, for the subsumption rule stated formally.
+TypeScript's union types are the structural LUB in wide production use. Java's conditional-operator
+typing rules (JLS §15.25) are the cautionary version — a table so intricate that few users can
+predict its result.
+
+**Cost:** LUB buys ergonomics and spends predictability. In a language whose selling point is that
+every expression's type is visible in its syntax, it is a contradiction rather than a trade.
+
+**Related:** bidirectional type checking, join and meet, variance, explicit injection.
+
+---
+
+## Normal completion and reachability
+
+**Problem:** "every path returns a value" and "there is no dead code after a return" can be enforced
+structurally at first — one `return`, positioned last — and that rule dies the moment `if` exists.
+The replacement is not a search for `return` statements; it is a per-statement judgment of whether
+control can reach the statement after it.
+
+**Shape:**
+
+```
+completes_normally(stmt) -> bool
+
+    return e              -> false
+    abort()               -> false
+    block [s1..sn]        -> completes_normally(sn), and each si must
+                             complete normally for s(i+1) to be reachable
+    if c { a } else { b }  -> completes_normally(a) || completes_normally(b)
+    if c { a }             -> true      # no else: the false path falls through
+    while c { b }          -> true      # may execute zero times
+    everything else        -> true
+
+a function body must NOT complete normally, unless its return type is unit
+a statement following one that does not complete normally is unreachable — an error
+```
+
+**Read:** the Java Language Specification §14.22, "Unreachable Statements", is the best-written
+version anywhere — normative, exhaustive, per-construct, and short enough to read in one sitting.
+C# has the equivalent as reachability plus definite assignment. The Dragon Book covers the general
+dataflow machinery, which is far more than this needs.
+
+**Cost:** the predicate is deliberately syntactic and therefore conservative. `while (true) { }`
+is treated as completing normally by a naive rule even though it cannot, which is why Java
+special-cases constant conditions — and every such special case is a place two compilers disagree
+about whether a program is legal. Keep the rule dumb and documented rather than clever.
+
+**Related:** definite assignment analysis, bottom type as the same information carried in the type,
+dead code elimination, mandatory return.
+
+---
+
 # Codegen
 
 ## Constant folding
@@ -557,6 +1096,39 @@ about debuggability does. The modern web equivalent is source maps, which solve 
 with a side file instead of inline directives.
 
 **Related:** source maps, DWARF, debug information, `#pragma` line control.
+
+---
+
+## Zero-sized types and unit erasure
+
+**Problem:** a type with exactly one value carries no information, so storing it, passing it and
+returning it are all pure overhead. A backend that treats it as an ordinary type emits loads and
+stores of nothing; a target language that cannot express an object of that type — C's `void` — will
+reject the output outright.
+
+**Shape:**
+
+```
+size_of(unit) == 0
+
+at codegen:
+    declaration of a zero-sized local -> emit nothing
+    assignment of a zero-sized value  -> emit the RHS for its effects, discard
+    parameter of zero-sized type      -> drop from the emitted signature
+    return of zero-sized type         -> emit `return;`
+```
+
+**Read:** the Rust reference on zero-sized types, and the Rustonomicon's ZST chapter for what breaks
+— notably that allocating one must not return null. Rust's `()`, `PhantomData` and empty structs are
+all ZSTs. Haskell's `()` and ML's `unit` are the same idea without the layout concern, since neither
+promises a memory representation.
+
+**Cost:** erasure means the emitted code no longer corresponds one-to-one with the source tree, so
+anything comparing the two — a differential interpreter, a `#line` scheme, a source map — has to
+agree about what vanished. Distinct from an *uninhabited* type, which has zero values rather than
+one; the two are easy to conflate and behave differently in a checker.
+
+**Related:** unit type, newtype erasure, `#line` directives, differential testing.
 
 ---
 

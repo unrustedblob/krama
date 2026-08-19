@@ -1,0 +1,16 @@
+
+fn main(): i32 {
+        let x: i32 = 10;
+        let y: i32 = read_from_stdin(); # Assume we know how to do this...
+
+        let z: i32 = if (x > y) {
+                give x - y;
+        } else {
+                give y - x;
+        };
+
+        # Possible addition - f-strings in @print macro...
+        @print("The difference between {x} and {y} is {z}");
+
+        return 0;
+}
