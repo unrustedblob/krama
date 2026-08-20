@@ -7,8 +7,9 @@ CFLAGS = -std=c23 -g -MMD -MP -Werror -Wall -Wextra -Wpedantic \
 GCCFLAGS = -Wmaybe-uninitialized -Wfree-nonheap-object -Wformat-signedness
 # LLVMFLAGS = -Wsometimes-uninitialized
 
-BUILD_DIR = build
 SRC_DIR = src
+TEST_DIR = tests
+BUILD_DIR = build
 
 TARGET = $(BUILD_DIR)/cfunC
 
@@ -16,7 +17,19 @@ SRCS = $(wildcard $(SRC_DIR)/*.c)
 
 OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
+ifneq ($(filter test,$(MAKECMDGOALS)),)
+	BUILD_DIR := $(TEST_DIR)/$(BUILD_DIR)
+	TARGET := $(BUILD_DIR)/test
+	SRCS := $(filter-out $(SRC_DIR)/main.c,$(SRCS))
+	TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
+	TEST_OBJS = $(patsubst $(TEST_DIR)/%.c, $(BUILD_DIR)/%.o, $(TEST_SRCS))
+	OBJS := $(OBJS) $(TEST_OBJS)
+	CFLAGS := $(CFLAGS) -DFUNC_TEST_SUITE
+endif
+
 all: $(TARGET)
+
+test: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) -o $(TARGET) $(OBJS)
@@ -25,9 +38,23 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(GCCFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/%.o: $(TEST_DIR)/%.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(GCCFLAGS) -c $< -o $@
 
 .PHONY: all clean
 clean:
 	rm -rf $(BUILD_DIR)
+
+clean_test:
+	rm -rf $(TEST_DIR)/$(BUILD_DIR)
+
+# test:
+# 	@echo "Test dir: $(TEST_DIR)"
+# 	@echo "Source Dir: $(SRC_DIR)"
+# 	@echo "Build Dir: $(BUILD_DIR)"
+# 	@echo "Target : $(TARGET)"
+# 	@echo "Objects: $(OBJS)"
+# 	@echo "Test Sources: $(TEST_SRCS)"
 
 -include $(OBJS:.o=.d)
