@@ -1,5 +1,6 @@
 #include "../src/arena.h"
 
+#include <assert.h>
 #include <stdio.h>
 
 struct TestCounter {
@@ -39,54 +40,90 @@ static struct TestCounter test_arena(void)
                 block_init_cap, block_max_cap);
 
         // ---------------------------------------------------
-        // 0 - Create the arena
+        // [TEST 0] - Create the arena
         // ---------------------------------------------------
 
         struct Arena *arena = arena_create();
 
-        CHECK((arena != nullptr), counter, "Creation of arena should return valid pointer");
+        printf("\n[TEST 0] - Create Arena\n---------------------------------------------\n");
+
+        CHECK((arena != nullptr), counter, "Creation of arena should return non-NULL pointer");
 
         // ---------------------------------------------------
-        // 1 - The usual case
+        // [TEST 1] - Arena Initial State
+        // Verify the initial state is consistent
+        // ---------------------------------------------------
+
+        const unsigned char *cursor = arena_get_cursor(arena);
+        const unsigned char *buffer = arena_get_buffer(arena);
+        size_t arena_cap = arena_get_capacity(arena);
+        size_t arena_available = arena_get_available(arena);
+
+        printf("\n[TEST 1] - Arena Iniital State\n---------------------------------------------\n");
+
+        CHECK(((arena_cap == block_init_cap) && (arena_cap == arena_available)
+               && (cursor == buffer)),
+              counter, "Created arena is initialized correctly");
+
+        // ---------------------------------------------------
+        // [TEST 2] - The usual case
         // Requeted allocation is within range.
         // ---------------------------------------------------
 
-        size_t request_space = (size_t)(block_init_cap / 2);
-        void *p = arena_alloc(arena, request_space);
-        void *cursor = arena_get_cursor(arena);
+        // The last item in request_sapce is to force the cursor into an aligned
+        // address, this is required for correctly testing [Test 3]
+        size_t request_space[] = { 100, 18, 205, 103, 256, 1, alignof(max_align_t) };
+        const unsigned char *p = nullptr;
 
-        CHECK(((uintptr_t)p != (uintptr_t)cursor), counter,
-              "After alloc, pointer returned and current Arena cursor position are not the same");
+        printf("\n[TEST 2] - The usuaal Case\n---------------------------------------------\n");
 
-        CHECK((((uintptr_t)cursor - (uintptr_t)p) == request_space), counter,
-              "After alloc, Arena cursor is ahead of pointer returned by exactly requested space "
-              "%zu",
-              request_space);
+        for (size_t i = 0; i < sizeof request_space / sizeof(size_t); ++i) {
+                printf("Run %zu\n", i + 1);
 
-        size_t arena_cap = arena_get_capacity(arena);
+                p = arena_alloc(arena, request_space[i]);
+                cursor = arena_get_cursor(arena);
+                arena_available = arena_get_available(arena);
 
-        CHECK((arena_cap == block_init_cap), counter,
-              "Arena capacity is the same as the fixed initial capacity. Expected %zu | Got %zu",
-              arena_cap, block_init_cap);
+                CHECK(((uintptr_t)p % alignof(max_align_t) == 0), counter,
+                      "Pointer returned is aligned. Pointer: %p, Align: %zu", (void *)p,
+                      alignof(max_align_t));
 
-        size_t arena_available = arena_get_available(arena);
+                bool cursor_moved = (p < cursor);
 
-        CHECK((arena_available == (arena_cap - request_space)), counter,
-              "Available store in the arenas buffer is exactly capacity - requested space. "
-              "Expected %zu | Got %zu",
-              (arena_cap - request_space), arena_available);
+                CHECK((cursor_moved), counter, "After alloc, the cursor has moved ahead");
+
+                // If the cursor hasn't moved we need to fail the next test
+                ptrdiff_t distance = cursor_moved ? cursor - p : 0;
+
+                CHECK(((size_t)distance == request_space[i]), counter,
+                      "After alloc, the cursor is ahead of pointer returned by exactly requested "
+                      "space %zu",
+                      request_space[i]);
+
+                CHECK((arena_available <= (arena_cap - request_space[i])), counter,
+                      "Available arena buffer storage is bounded by the remaining capacity "
+                      "Available (%zu) <= Max Possible (%zu)",
+                      arena_available, (arena_cap - request_space[i]));
+        }
+
+        assert(((uintptr_t)cursor % alignof(max_align_t) == 0));
 
         // -----------------------------------------------------
-        // 2 - Tight fit
+        // [TEST 3] - Tight fit
         // Requested allocation is for the exact available space
+        // NOTE: Cursor must be aligned for this test
         // ------------------------------------------------------
+
+        printf("\n[TEST 3] - Tight Fit\n---------------------------------------------\n");
 
         p = arena_alloc(arena, arena_available);
         cursor = arena_get_cursor(arena);
         arena_available = arena_get_available(arena);
 
         CHECK((arena_available == 0), counter,
-              "On \"exact fit\" the available store in arena should be 0");
+              "On \"exact fit\", for an aligned cursor, the available store in arena should be 0 | "
+              "Got: %zu",
+              arena_available);
 
         arena = arena_destroy(arena);
         p = nullptr;
