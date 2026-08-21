@@ -94,7 +94,7 @@ AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
 BinPackArguments: true
 BinPackParameters: true
-BreakBeforeBinaryOperators: None
+BreakBeforeBinaryOperators: true
 BreakBeforeTernaryOperators: true
 BreakStringLiterals: true
 Cpp11BracedListStyle: false      # `{ 1, 2 }` not `{1, 2}` — reads better in C
