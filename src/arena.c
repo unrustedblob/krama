@@ -13,6 +13,7 @@ constexpr size_t KB = 1024;
 constexpr size_t MB = KB * 1024;
 constexpr size_t BLOCK_INIT_CAP = 64 * KB;
 constexpr size_t BLOCK_MAX_CAP = 5 * MB;
+constexpr size_t GROWTH_FACTOR = 2;
 
 // A simple list node for a block of data
 struct Block_ {
@@ -171,24 +172,29 @@ static void make_align_(struct Arena *restrict arena, size_t align)
 
 static void move_cursor_(struct Arena *restrict arena, size_t size)
 {
-        assert(size < arena->available); // Not enough space to mvoe cursor in block
+        assert(size <= arena->available); // Not enough space to move cursor in block
         arena->cursor += size;
         arena->available -= size;
 }
 
 #ifdef FUNC_TEST_SUITE
 
-void *arena_get_cursor(struct Arena *arena)
+const unsigned char *arena_get_cursor(const struct Arena *const arena)
 {
         return arena->cursor;
 }
 
-size_t arena_get_available(struct Arena *arena)
+const unsigned char *arena_get_buffer(const struct Arena *const arena)
+{
+        return arena->head->buffer;
+}
+
+size_t arena_get_available(const struct Arena *const arena)
 {
         return arena->available;
 }
 
-size_t arena_get_capacity(struct Arena *arena)
+size_t arena_get_capacity(const struct Arena *const arena)
 {
         return arena->head->cap;
 }
@@ -203,4 +209,8 @@ size_t arena_get_init_cap(void)
         return BLOCK_INIT_CAP;
 }
 
+size_t arena_get_growth_factor(void)
+{
+        return GROWTH_FACTOR;
+}
 #endif // FUNC_TEST_SUITE

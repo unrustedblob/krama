@@ -28,11 +28,13 @@ nullptr_t arena_destroy(struct Arena *restrict arena);
 
 #ifdef FUNC_TEST_SUITE
 
-void *arena_get_cursor(struct Arena *arena);
-size_t arena_get_available(struct Arena *arena);
-size_t arena_get_capacity(struct Arena *arena);
+const unsigned char *arena_get_cursor(const struct Arena *arena);
+const unsigned char *arena_get_buffer(const struct Arena *arena);
+size_t arena_get_available(const struct Arena *arena);
+size_t arena_get_capacity(const struct Arena *arena);
 size_t arena_get_max_cap(void);
 size_t arena_get_init_cap(void);
+size_t arena_get_growth_factor(void);
 
 #endif // FUNC_TEST_SUITE
 #endif // FUNC_ARENA_H
