@@ -8,7 +8,7 @@ struct TestCounter {
         size_t total;
 };
 
-static_assert((sizeof(struct TestCounter) <= 16), "Struct size crossing pass-by-value limit");
+static_assert((sizeof(struct TestCounter) <= 16), "struct size should be register-passable");
 
 static struct TestCounter test_arena(void);
 
@@ -106,13 +106,13 @@ static struct TestCounter test_arena(void)
                       arena_available, (arena_cap - request_space[i]));
         }
 
-        assert(((uintptr_t)cursor % alignof(max_align_t) == 0));
-
         // -----------------------------------------------------
         // [TEST 3] - Tight fit
         // Requested allocation is for the exact available space
         // NOTE: Cursor must be aligned for this test
         // ------------------------------------------------------
+
+        assert(((uintptr_t)cursor % alignof(max_align_t) == 0));
 
         printf("\n[TEST 3] - Tight Fit\n---------------------------------------------\n");
 
@@ -124,6 +124,27 @@ static struct TestCounter test_arena(void)
               "On \"exact fit\", for an aligned cursor, the available store in arena should be 0 | "
               "Got: %zu",
               arena_available);
+
+        // -----------------------------------------------------
+        // [TEST 4] - Chain Arena Block
+        // Request allocation to chain a new block.
+        // Dep: [TEST 3] must have completely passed for this
+        // ------------------------------------------------------
+
+        assert(counter.passed == counter.total && arena_available == 0);
+
+        printf("\n[TEST 4] - Grow Arena\n---------------------------------------------\n");
+
+        size_t old_cap = arena_cap;
+        size_t arena_growth_factor = arena_get_growth_factor();
+
+        p = arena_alloc(arena, 1);
+        arena_cap = arena_get_capacity(arena);
+
+        CHECK(((arena_cap / old_cap) == arena_growth_factor), counter,
+              "Arena should grow by growth factor. (Previous Capacity %zu | Current Capacity %zu) "
+              "Expected %zu | Got %zu",
+              old_cap, arena_cap, arena_growth_factor, (arena_cap / old_cap));
 
         arena = arena_destroy(arena);
         p = nullptr;
