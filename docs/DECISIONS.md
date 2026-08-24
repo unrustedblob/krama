@@ -331,6 +331,48 @@ first) as prior art for the same constraint arrived at independently.
 
 ---
 
+### D-024 — Arena initial capacity is fixed, not caller-supplied
+
+**Status:** Decided · **Session:** ## · **Spec:** n/a (implementation) — refines D-003
+
+**Decided.** `arena_create` takes no capacity parameter — `struct Arena *arena_create(void)`. The
+arena always starts its first block at a fixed internal baseline (`BLOCK_INIT_CAP`) and grows by
+the doubling-then-chaining policy STYLE.md §9.2 already states: double until `BLOCK_MAX_CAP`, then
+chain fixed-size blocks.
+
+**Rejected.**
+- *Caller-supplied initial capacity, sized off the source file's byte length.* Attractive because
+  `main` is the one place in the pipeline that actually holds a concrete number. Rejected because
+  milestone 1's arena holds AST nodes specifically, and byte count doesn't predict node count — token
+  density, expression complexity, comments, and whitespace all move the ratio, so the hint would be
+  noise wearing a signal's clothes.
+- *Today's unenforced caller-supplied capacity.* `arena_create` currently takes any `size_t` and
+  `malloc`s it directly for the first block, with no ceiling check — `BLOCK_MAX_CAP` is only enforced
+  inside `add_block_`, so a caller can bypass it entirely on the very first allocation. Rejected as
+  inconsistent: a limit meant to bound every block in the chain didn't bound the first one.
+
+**Why.** No phase of the pipeline currently has a principled number to offer, so a parameter that
+exists "for later" is an unused knob and a place for the `BLOCK_MAX_CAP` bypass to keep hiding.
+Removing it at the type level is simpler than validating an input nothing can supply correctly yet.
+
+**Consequences.**
+- `arena_create(size_t capacity)` → `arena_create(void)`, changing every call site, including
+  `tests/test_arena.c`'s `arena_create(request_cap)`.
+- `BLOCK_MAX_CAP` moves out of the unconditional part of `arena.h` — nothing in the public contract
+  takes it as input or returns it, so per §3.6's reasoning it belongs behind `FUNC_TEST_SUITE`
+  alongside the existing test-only accessors, not in the ordinary header.
+- A new constant for the fixed starting size, named consistently with `BLOCK_MAX_CAP` per §2.4's
+  `_cap` suffix — `BLOCK_INITIAL_CAP`.
+
+**Revisit if.** A later phase gains a genuine sizing signal for its own arena usage — e.g. a symbol
+table sized off scope count. That would argue for a hint parameter on *that* phase's arena use, not a
+return to caller-supplied capacity for the AST arena.
+
+**Reference.** STYLE.md §9.2 (growth policy this formalizes); D-003 (arena allocator decision this
+refines).
+
+---
+
 ### D-0XX — [Template]
 
 **Status:** Decided · **Session:** ## · **Spec:** §#
