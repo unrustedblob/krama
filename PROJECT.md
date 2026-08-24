@@ -13,7 +13,7 @@
 
 **Blocked on:** -
 
-**Last green:** [confirm] Builds clean under all flags; arena iteration 1 compiles and links
+**Last green:** Builds clean under all flags; arena iteration 1 compiles and links
 
 **Next up:** Finish the arena test suite. Then decision records for the arena's implementation
 choices, then AST node definitions.
@@ -126,13 +126,10 @@ This did not work. For now, using `override CC = gcc` but this will ignore any c
    it. `main` has no basis for choosing a block size, so the parameter had no legitimate caller.
 3. The allocate-or-die decision paid for the block layout: with two allocations per block there is
    a partial-failure state, but since OOM exits there is no unwind path to write.
-4. [fill in from testing]
 
 **Didn't.**
 
-| Review Pass | Issue # | Bug | Resolution |
-|---|---|---|---|
-| | | [fill in] | |
+- n/a
 
 **Friction.**
 
