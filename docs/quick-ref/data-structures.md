@@ -9,7 +9,6 @@ Structures and the layout tradeoffs that make them worth naming. Every shape ske
 - Growable array (amortized doubling)
 - Hash table: chaining vs. open addressing
 - Intern pool
-- Pointer-to-pointer tail insertion
 - Robin Hood hashing
 - Scope stack
 - Struct-of-arrays (SoA)
@@ -143,43 +142,6 @@ and the "copy" step disappears entirely.
 **Read:** every compiler has one. Lisp's symbol table is the ancestor.
 
 **Related:** string interning, flyweight, symbol table, arena-backed storage.
-
----
-
-## Pointer-to-pointer tail insertion
-
-**Problem:** appending to a singly linked list has two cases — the list is empty, so update the head
-pointer; the list is not, so update the last node's `next`. Written directly, that is a branch at
-every append and a special case in every builder, and the empty case is the one that gets tested
-least.
-
-**Shape:**
-
-```
-tail = &head                  // a pointer to the slot to fill, not to a node
-
-append(node):
-    node.next = null
-    *tail = node              // fills either head or someone's next — same code
-    tail = &node.next         // the new slot to fill
-```
-
-The insight is that the head pointer and every `next` field are *the same kind of thing*: a slot
-holding the next node. Pointing at the slot rather than at the node erases the distinction, and with
-it the branch. Appending to an empty list and appending to a long one become identical.
-
-The same trick removes the special case from deletion — walk with a `Node **`, and unlinking is
-`*p = (*p)->next` whether the victim is first or not.
-
-**Where it earns its keep:** any builder that accumulates a list left to right — a parser collecting
-statements in a block, arguments in a call, parameters in a signature. Written once with `tail`, the
-loop body is two lines and has no empty-list case to get wrong.
-
-**Read:** Linus Torvalds' "good taste" TED talk, which uses exactly the deletion case; Chris Wellons
-uses the append form throughout his C posts.
-
-**Related:** singly linked list; the arena, which makes this shape natural because nodes are never
-individually freed and so `next` pointers never dangle.
 
 ---
 

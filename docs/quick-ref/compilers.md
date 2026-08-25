@@ -4,165 +4,20 @@ Organised by pipeline stage. Every shape sketch is pseudocode.
 
 ## Contents
 
-**Language design:** structured program theorem · labelled break and labelled blocks · iterator
-protocol vs. built-in range · refutable vs. irrefutable patterns
 **Scanning:** maximal munch · trivia attachment · keyword post-filtering · perfect hashing · string
 interning · token lookahead buffer
 **Parsing:** cascading recursive descent · Pratt parsing · left-recursion elimination · panic-mode
-recovery · synchronization sets · error productions · non-associative precedence · expression
-restrictions
+recovery · synchronization sets · error productions · declaration follows use · lvalue / place
+expression
 **AST and positions:** source span tracking · line table + binary search · index-based node
 references · side table for annotations
-**Lowering and IR:** desugaring · A-normal form / three-address code
-**Type systems:** unit type · bottom type · strong typedef · bitcast · arbitrary-width integer types
-**Checking:** symbol table with scope chain · bidirectional type checking · subsumption and least
-upper bound · normal completion and reachability
-**Codegen:** constant folding · `#line` directives · zero-sized types and unit erasure
+**Checking:** symbol table with scope chain · bidirectional type checking · type constructor /
+derived type · kinds · transitive const · interior mutability · variance · mutability polymorphism ·
+constant expression vs. const-qualified object · effectively final · escape analysis ·
+intraprocedural vs. interprocedural analysis · region-based memory management
+**Codegen:** constant folding · `#line` directives
 **Testing:** differential testing · property-based testing · delta debugging · random program
 generation · small-step operational semantics
-
----
-
-# Language design
-
-## Structured program theorem (Böhm–Jacopini)
-
-**Problem:** "which control-flow constructs does the language actually need?" reads like a taste
-question. It is not — the minimal set is a published result, which turns the shopping list for a
-core language into a fact rather than an argument.
-
-**Shape:**
-
-```
-sequence + selection + iteration  ==  any computable function
-
-everything else is derived:
-    for, do/while, switch, break, continue, early return
-```
-
-The practical use is as a stopping rule. A core with one selection form and one iteration form is
-known to be complete, so anything further is added for ergonomics and can be argued about on those
-terms alone.
-
-**Read:** Böhm and Jacopini, *Flow Diagrams, Turing Machines and Languages with Only Two Formation
-Rules*, CACM 1966. Knuth's *Structured Programming with go to Statements* (1974) is the essential
-counterweight and the more useful of the two for anyone actually designing a language. Dijkstra's
-*Go To Statement Considered Harmful* is the polemic that made the result famous and says the least.
-
-**Cost:** the construction can require introducing extra state variables, so "expressible" and
-"expressible without contortion" are different claims. The theorem is cited as licence to ban `goto`
-far more often than it supports — that reading is the index's warning, not the paper's argument.
-
-**Related:** reducible control flow graphs, single-entry single-exit regions, Knuth's counterargument.
-
----
-
-## Labelled break and labelled blocks
-
-**Problem:** `break`, `continue`, and any block-value keyword bind to the nearest enclosing
-construct. When the exit or the value belongs to an *outer* one — a search three levels deep that
-has found its answer — nearest-enclosing cannot express it, and the workaround is a flag variable
-tested at every level on the way out.
-
-**Shape:**
-
-```
-outer: {
-    for (x in xs) {
-        for (y in ys) {
-            if (match(x, y)) { break outer (x, y); }
-        }
-    }
-    give none;
-}
-
-the label names a target; the exit is non-local
-every block between here and the target has its remainder made unreachable
-```
-
-**Read:** Zig's labelled blocks — `blk: { break :blk value; }` — are the most complete version,
-since one mechanism carries both the exit and the value. Rust's labelled `break 'a value` is the
-same idea restricted to loops and `loop` blocks. Java (JLS §14.15) has labelled break for loops
-without the value half, which is the older and narrower form.
-
-**Cost:** two decisions that nearest-enclosing never raised. Labels occupy a namespace that must be
-kept separate from variables, which is why Zig and Rust both mark them syntactically rather than
-letting a bare identifier serve. And a non-local exit feeds the reachability predicate, so it cannot
-land before that analysis exists.
-
-**Related:** normal completion analysis, structured non-local exit, `goto` with a restricted target.
-
----
-
-## Iterator protocol versus built-in range
-
-**Problem:** `for x in thing` has to decide what `thing` may be. Either a fixed set of built-in
-types the compiler knows how to walk, or anything implementing an interface — and the second answer
-cannot be taken before the language has interfaces, generics, and a way to name an associated
-element type.
-
-**Shape:**
-
-```
-built-in:   for x in xs
-              compiler knows arrays, slices, maps, strings, and nothing else
-              no user extension; the loop is a primitive
-
-protocol:   for x in xs   desugars to
-              it = xs.into_iter()
-              loop { match it.next() { Some(x) => body, None => break } }
-              any type implementing the trait works
-```
-
-**Read:** the Go spec's "For statements with range clause" is the built-in answer, unchanged and
-uncontroversial for fifteen years. The Rust reference on `IntoIterator` gives the protocol answer
-with the desugaring written out explicitly — worth reading as an instance of the sugar/core split as
-much as of iteration.
-
-**Cost:** the protocol answer drags in its entire dependency chain — traits or interfaces, generics,
-and a monomorphisation or boxing strategy for them. That is a compilation-architecture decision, not
-a loop feature. The built-in answer forecloses nothing: a protocol can be added later and the
-built-in types retrofitted onto it.
-
-**Related:** monomorphisation, associated types, desugaring, external vs. internal iteration.
-
----
-
-## Refutable versus irrefutable patterns
-
-**Problem:** `let (a, b) = pair` and `let (a, 0) = pair` look like one feature and are two. The
-first cannot fail — every pair has two components. The second can, and admitting it obliges the
-language to say what happens on failure, plus exhaustiveness checking wherever that failure is meant
-to be handled rather than fatal.
-
-**Shape:**
-
-```
-irrefutable — always matches, legal in a binding position
-    let (a, b) = pair
-    for (k, v) in map
-    fn f((x, y): Point)
-
-refutable — may fail, legal only where failure has somewhere to go
-    match v { Some(x) => ..., None => ... }
-    if let Some(x) = v { ... }
-
-rule: binding positions accept irrefutable patterns only
-      exhaustiveness checking applies to refutable positions
-```
-
-**Read:** the Rust reference, "Patterns", §refutability, states the split as a normative rule and is
-the clearest short treatment. Wadler's *Views: A way for pattern matching to cohabit with data
-abstraction* sets out the tension between patterns and encapsulation. Maranget's *Compiling Pattern
-Matching to Good Decision Trees* is the implementation, and carries the exhaustiveness algorithm.
-
-**Cost:** destructuring arrives looking free — a tuple type and a binding form. What follows is not:
-refutable patterns, match expressions, exhaustiveness checking over user types, and a diagnostic
-that can say *which* case is missing. Adopt destructuring on its own merits, never as a side effect
-of a loop header or a multiple binding.
-
-**Related:** exhaustiveness checking, decision tree compilation, `switch` without `default` as the
-degenerate case.
 
 ---
 
@@ -487,69 +342,76 @@ Add them in response to real confusion, not speculatively.
 
 ---
 
-## Non-associative precedence (`%nonassoc`)
+## Declaration follows use (C declarator syntax)
 
-**Problem:** `a < b < c` is legal C and means something almost nobody intends. A precedence level
-written as a loop admits chains; the same level written as an optional single rejects them at parse
-time, before types are involved at all.
+**Problem:** C has no syntax for writing a type on its own. "Pointer to array of 25 int" only exists
+smeared across a declarator with the identifier buried in the middle, so readers reach for the
+"clockwise/spiral rule", which is wrong for some declarations. Designing a new language's type
+syntax without knowing why C's looks like that tends to reproduce it by accident.
 
 **Shape:**
 
 ```
-left-associative — a loop
-    additive   = mul { ( "+" | "-" ) mul }
+C:        int *p;          — read as "the expression *p has type int"
+          int (*a)[25];    — identifier in the middle; read outward
 
-non-associative — an optional single
-    comparison = additive [ ( "<" | ">" | "<=" | ">=" ) additive ]
+prefix:   p: *[25]int      — read left to right, no backtracking
 ```
 
-The technique generalises past comparison: any operator whose chained form is meaningless rather
-than merely surprising belongs at a non-associative level. Narrowing the production makes the bug
-unrepresentable instead of diagnosable.
+C's rule is that a declaration mirrors the *use* of the thing declared. That is internally
+consistent and is the reason `*` is a prefix in the declarator but the type constructor is
+conceptually postfix. It also does not survive being moved to a prefix type grammar: `*[25]i32` can
+no longer claim to mirror any expression, so a language choosing `*` after that point is choosing
+familiarity, not coherence — which is a fine reason, just not C's reason.
 
-**Read:** POSIX yacc's `%nonassoc` declaration is where the term comes from and is worth reading
-alongside `%left` and `%right` to see the three as one mechanism. The Rust reference — "comparison
-operators cannot be chained" — is the modern statement. Python deliberately does the opposite, where
-`a < b < c` means `a < b and b < c`, and is the dissent worth understanding before choosing.
+Where C needs a type with no name attached — casts, `sizeof` — it uses an *abstract declarator*: the
+same grammar with the identifier deleted. That is the language admitting it needs a name-free
+spelling and declining to build a separate one.
 
-**Cost:** the rejected expression is *type-correct* in a language with `bool`, so the diagnostic has
-to explain the design rather than report a mismatch.
+**Read:** K&R §5.1. The C99 Rationale on declarator syntax. `cdecl` as a tool, and its existence as
+evidence. Go's "Go's Declaration Syntax" blog post argues the prefix case directly.
 
-**Related:** single non-recursive unary prefix, precedence declarations, ambiguity resolution by
-production narrowing.
+**Cost:** none to know; the trap is assuming a prefix grammar inherits C's justification along with
+its glyph.
+
+**Related:** abstract declarator (the name-free spelling), right-to-left reading (the rule that
+actually works), type constructor (what the prefix form makes explicit).
 
 ---
 
-## Expression restrictions
+## Lvalue / place expression
 
-**Problem:** a language with brace-delimited blocks and brace-delimited struct literals cannot parse
-`if x { }` unambiguously — `x { }` may be a struct literal with the `if` still awaiting its block,
-or `x` may be the condition and `{ }` the block. The grammar is genuinely ambiguous, not merely
-awkward, and lookahead does not help because both parses are complete.
+**Problem:** assignment needs to say *where* to store, not *what* value to compute. As soon as the
+left of `=` can be more than a bare identifier — `a[i]`, `s.f`, `*p` — the language has acquired a
+second grammar running alongside the expression grammar, whether or not anyone designed one.
 
 **Shape:**
 
 ```
-the ambiguity
-    if point { }        # `point {}` a struct literal? or `point` the condition?
+place = IDENT { "." IDENT | "[" expr "]" | deref } ;
 
-fix A — restrict the expression grammar in that position
-    if_expr = "if" expr_no_struct_literal block
+assignment = "set" place assign_op expr ";" ;
 
-fix B — require parentheses, and the ambiguity cannot arise
-    if_expr = "if" "(" expr ")" block
+evaluating a place yields a location, not a value
+evaluating an expression yields a value, not a location
 ```
 
-**Read:** the Rust reference, "Expressions", on the struct-expression restriction, and the Go spec's
-parsing-ambiguity paragraph under "Composite literals". Both languages took fix A and both document
-it as a wart. Swift has the same collision with trailing closures.
+Two properties make this worth naming rather than growing one statement form per target shape.
+First, one production covers fields, elements and dereference together, so each new composite type
+costs nothing. Second, keeping places as their own judgment in the semantics ("evaluate a place to a
+location") is what lets assignment stay a statement while its target grows arbitrarily complex.
 
-**Cost:** fix A makes the expression grammar context-dependent — an expression legal in one position
-is illegal in another, and every error message then has to explain that. Fix B costs two characters
-and is what C already did by accident.
+The hazard is compound assignment. `a[f()] += 1` must evaluate the place once; a naive desugaring to
+`a[f()] = a[f()] + 1` evaluates it twice. C specifies single evaluation explicitly for this reason.
+A language with no side effects in expressions gets it free — and stops getting it free at exactly
+the moment calls become expressions.
 
-**Related:** dangling else, grammar ambiguity, context-dependent productions, offside rule
-collisions.
+**Read:** ISO C §6.3.2.1 (lvalues, arrays and function designators). The Rust Reference, "Place
+Expressions and Value Expressions", which is where the modern terminology comes from. C++'s five
+value categories are the cautionary version of letting this grow.
+
+**Related:** value categories, addressability, compound assignment double-evaluation, desugaring
+(where the double-evaluation bug is introduced).
 
 ---
 
@@ -666,253 +528,6 @@ dissolves.
 
 ---
 
-# Lowering and IR
-
-## Desugaring (sugar/core split, lowering)
-
-**Problem:** every convenient surface form — compound assignment, `for`, `else if` chains — adds a
-case to the type checker, the interpreter, the code generator, and the written semantics. The cost
-of a feature is not one case; it is feature count times pass count.
-
-**Shape:**
-
-```
-core  = the minimal set of forms the semantics has rules for
-sugar = everything else, defined as a rewrite into core
-
-lower(node):
-    CompoundAssign(place, op, rhs) -> Assign(place, Binary(op, Read(place), lower(rhs)))
-    ForLoop(init, cond, step, body) -> Seq(init, While(cond, Seq(body, step)))
-    _ -> node, children lowered
-
-pipeline: parse -> lower -> check -> { codegen, interpret }
-```
-
-Where the rewrite happens is its own decision. In the parser it is cheapest and least visible; as a
-separate pass between parse and check it costs a tree walk and keeps phase separation honest.
-
-**Read:** the rustc dev guide on HIR lowering is the most legible modern implementation. GHC's
-desugarer and Simon Peyton Jones's *The Implementation of Functional Programming Languages* are the
-tradition it comes from. Landin coined "syntactic sugar" in *The Next 700 Programming Languages*.
-
-**Cost:** two failure modes, both silent. A rewrite that duplicates a subexpression changes how many
-times it evaluates — `a[f()] += 1` is the canonical case. A rewrite that synthesises nodes destroys
-the spans diagnostics point at, so the user gets an error on an operator they never typed. Both are
-handled at the rewrite site or not at all.
-
-**Related:** macro expansion, HIR, Core, source-to-source translation, hygiene.
-
----
-
-## A-normal form / three-address code
-
-**Problem:** a nested expression tree gives every analysis and optimisation pass an arbitrary shape
-to walk. Normalising so that every operation takes only trivial operands — variables and literals —
-gives each pass one uniform form to handle.
-
-**Shape:**
-
-```
-a + b * c
-
-becomes
-
-t0 = b * c
-t1 = a + t0
-```
-
-**Read:** Flanagan, Sabry, Duba and Felleisen, *The Essence of Compiling with Continuations* (1993),
-for ANF. The Dragon Book §6.2 for three-address code, which is the same idea in classical imperative
-dress. SSA is what results from additionally numbering each assignment uniquely.
-
-**Cost:** named, real, and not for a C backend — C accepts nested expressions, so normalising before
-emission buys nothing and costs readability in the generated output. It becomes necessary when
-targeting an IR that only takes atomic operands, such as QBE or LLVM. The *style* it describes —
-temporaries over nesting, statements over expressions — is worth keeping in generated C even when
-the form is not, because it is what keeps the output debuggable.
-
-**Related:** SSA, continuation-passing style, quadruples, temporaries.
-
----
-
-# Type systems
-
-## Unit type (nullary tuple, `()`)
-
-**Problem:** does an expression that produces nothing have *some* type, or *no* type? The answer
-decides whether the language needs one `if` or two. If "no value" is itself a type with exactly one
-value, then statement-position `if` is just an expression of that type and no second construct is
-required.
-
-**Shape:**
-
-```
-unit is a type with exactly one value, carrying zero bits
-
-    type(block with no value-producing terminator) = Unit
-    type(if c { } else { })                        = Unit
-    type(while c { })                              = Unit
-
-without it, every construct needs two forms:
-    one usable as a statement, one usable as an expression
-```
-
-**Read:** the Rust reference on the unit type `()`, with the fact that Rust has exactly one `if` as
-the payoff. ML's `unit` and Haskell's `()` are the same construct in the tradition it comes from.
-Pierce, *Types and Programming Languages*, §11.2, treats it as a base case when building a type
-system up from nothing.
-
-**Cost:** the type must be erased at code generation or it costs real loads and stores, and it is
-unspellable in a target language whose `void` is uninhabited — `let x: unit` has no direct C
-translation. Easily confused with the bottom type, which has zero values rather than one and behaves
-oppositely in a checker.
-
-**Related:** zero-sized types, bottom type, `void` as a return type only, tuple arity.
-
----
-
-## Bottom type (uninhabited type, `never`, `!`)
-
-**Problem:** a branch that diverges — returns, aborts, loops forever — produces no value, but a type
-checker comparing branch types demands one. Without a type for "control does not reach here", every
-`if` with an early return in one arm is rejected, and the language grows an ad-hoc exception in the
-typing rule instead.
-
-**Shape:**
-
-```
-type(return e) = Never
-type(abort())  = Never
-
-Never is a subtype of every type, so it disappears at the join:
-    join(Never, T) = T
-    join(T, Never) = T
-    join(T, U)     = error unless T == U
-
-a value of Never cannot be constructed, so the subtyping is sound:
-the coercion site is unreachable by construction
-```
-
-**Read:** the Rust reference on the never type `!`, and RFC 1216 for the argument that introduced it.
-Kotlin's `Nothing`, TypeScript's `never` and Scala's `Nothing` are the same construct. Pierce,
-*Types and Programming Languages*, §15.4, on Bot.
-
-**Cost:** it is the one subtyping relation a language otherwise free of subtyping must admit, so
-"no coercions anywhere" stops being literally true — the honest statement becomes "no coercions
-except from the type that has no values". Distinct from the unit type: unit has one value and is
-erased at codegen, Never has none and is unreachable. Conflating them yields a checker that accepts
-genuinely dead code.
-
-**Related:** normal completion analysis, divergence, subtyping, uninhabited vs. zero-sized.
-
----
-
-## Strong typedef (distinct type versus alias)
-
-**Problem:** two things with identical representation and different meaning — a byte and a small
-number, a user ID and a post ID, metres and feet — are interchangeable to the compiler if one is an
-alias for the other. Every confusion between them is then a bug the type system was in a position to
-catch and declined to.
-
-**Shape:**
-
-```
-alias:    B refers to the same type as A
-          a B is accepted anywhere an A is expected — no checking gained
-
-distinct: B has A's representation and its own identity
-          conversion in either direction is explicit and named
-          B's legal operations are declared independently of A's
-
-the test: does f(a) compile, where f expects B and a is an A?
-          alias -> yes.  distinct -> no.  That is the whole difference.
-```
-
-**Read:** C++17's `std::byte` (proposal P0298, Macintosh) is the best-documented modern instance,
-and its rationale — that `char` was doing double duty as character and as raw memory — is the
-canonical argument for the split. Ada's derived types (RM §3.4) are the oldest thorough version.
-Haskell's `newtype` and Rust's tuple-struct wrapper are the functional spelling. Go's
-`type byte = uint8` is the deliberate counterexample.
-
-**Cost:** every boundary crossing becomes an explicit conversion, and the verbosity lands hardest in
-exactly the code that crosses most — parsing, serialisation, hashing. VHDL has enforced this split
-between `std_logic_vector` and `numeric_std` since the early nineties, so the verdict is in: users
-complain about the conversion noise and nobody proposes removing it.
-
-**Related:** newtype, phantom types, units of measure, nominal vs. structural typing.
-
----
-
-## Bitcast (type punning, `transmute`)
-
-**Problem:** two conversions look alike and are not. One preserves the *value* and may change the
-bits — integer widening, float to integer. The other preserves the *bits* and changes the meaning —
-a float to its IEEE-754 pattern. They fail differently: the first can lose information or trap, the
-second can only be wrong about intent. One spelling for both hides which risk was taken.
-
-**Shape:**
-
-```
-cast(T, x)     value-preserving
-               representation may change; may trap or lose precision
-               widths may differ
-
-bitcast(T, x)  representation-preserving
-               bits retained, meaning changes; never traps
-               REQUIRE sizeof(T) == sizeof(typeof(x))
-```
-
-The width requirement is the entire safety story. Without it the operation reads or invents bytes
-that were never there.
-
-**Read:** Zig separates `@bitCast` from `@intCast` and `@floatCast` and is the cleanest reference.
-LLVM IR distinguishes the `bitcast` instruction from the converting casts for the same reason.
-Rust's `std::mem::transmute` documentation is worth reading for the opposite lesson — it does not
-stop at width equality and is correspondingly notorious.
-
-**Cost:** in C the portable spelling is `memcpy`, not a pointer cast. Casting a `float *` to
-`uint32_t *` and dereferencing violates strict aliasing and is undefined however universally it
-appears in real code; the union trick is legal in C99 and not in C++. A language offering this needs
-a builtin precisely because the obvious implementation is wrong.
-
-**Related:** strict aliasing, `memcpy` as the portable pun, representation vs. value conversion.
-
----
-
-## Arbitrary-width integer types
-
-**Problem:** a bit-level slice five bits wide has no type in a language whose integers come in
-8/16/32/64. Storing it in the next size up with the high bits zeroed puts the real width back in the
-programmer's head, which is the untyped knowledge the type system was meant to capture.
-
-**Shape:**
-
-```
-types u1 .. uN and i1 .. iN, width carried in the type
-
-    slice(x: b32, 3..8) : b5
-
-width arithmetic in the checker:
-    concat(b3, b5) : b8
-
-packed structs fall out:
-    struct { flag: b1, kind: b3, len: b12 }   # 16 bits, layout stated not implied
-```
-
-**Read:** the Zig language reference on integers, which has `u1` through `u65535` as first-class
-types. LLVM's Language Reference on the `iN` type is where the lowering strategy is visible. VHDL
-and Verilog have had this natively for decades because hardware description requires it.
-
-**Cost:** codegen must lower non-power-of-two widths to something the machine has, meaning masking
-and shifting on every load and store. C's bitfields are the cautionary version — the feature without
-the type system — which is why bit order and packing are implementation-defined there and nobody
-relies on them portably. Bit numbering must also be defined by significance rather than memory
-order, or the feature becomes endian-dependent.
-
-**Related:** bitfields, packed structs, bit slicing, endianness, `iN` lowering.
-
----
-
 # Checking
 
 ## Symbol table with scope chain
@@ -969,80 +584,416 @@ readable. The technique underpins most modern type checkers.
 
 ---
 
-## Subsumption and least upper bound
+## Type constructor / derived type
 
-**Problem:** two branches produce different types and the expression needs one. Either the checker
-demands they match exactly and rejects, or it computes a common supertype and accepts. This looks
-like a convenience question and is not — it decides whether an expression's type can be read off
-what is written, or must be inferred from context.
+**Problem:** the moment a type can contain another type — pointer, array, struct, function — a flat
+`enum TypeKind` stops working, and the checker's `==` on a tag stops being type equality. The
+representation change is structural and retrofitting it means finding every site that built a type
+by hand.
 
 **Shape:**
 
 ```
-exact match:   type(if c {A} else {B}) = A, and error unless A == B
+a type is a tree:
+    leaf        i32, f32, bool, ...
+    constructor tag + arguments
 
-subsumption:   push the expected type down into each arm
-               ask "is this acceptable here", not "do these agree"
+    ptr(T)              one type argument
+    array(T, N)         a type argument and a value argument
+    func(T..., R)       many type arguments
 
-LUB / join:    synthesise the smallest type both arms fit
-               join(i32, f32) = f32?  i32|f32?  error?
-
-the tell: under LUB, deleting a type annotation elsewhere can change
-          this expression's type
+type equality is a recursive walk over constructor and arguments,
+not an integer comparison
 ```
 
-The explicit alternative is injection — the programmer names a constructor, both arms genuinely have
-the wider type already, and exact match applies unchanged.
+The name matters because it separates two things beginners conflate. `ptr` on its own is *not* a
+type — it is a function from types to types. `ptr(i32)` is a type. C's standard calls the results
+**derived types** and treats them as types in full standing; what C lacks is a way to *write* one
+without a declarator wrapped around it, which is why "a pointer isn't really a type in C" is a
+common and wrong conclusion.
 
-**Read:** Pierce, *Types and Programming Languages*, §15.3, for the subsumption rule stated formally.
-TypeScript's union types are the structural LUB in wide production use. Java's conditional-operator
-typing rules (JLS §15.25) are the cautionary version — a table so intricate that few users can
-predict its result.
+Array is the awkward member: it takes a type *and a value*, so the argument list is heterogeneous.
+That makes arrays harder than single-parameter generics in this one respect, not a special case of
+them.
 
-**Cost:** LUB buys ergonomics and spends predictability. In a language whose selling point is that
-every expression's type is visible in its syntax, it is a contradiction rather than a trade.
+**Read:** ISO C §6.2.5 on derived types. Pierce, *Types and Programming Languages* ch. 29 for the
+general treatment. Clang's `ASTContext` for a production version with uniquing attached.
 
-**Related:** bidirectional type checking, join and meet, variance, explicit injection.
+**Related:** kinds (the notation for "how many arguments and of what sort"), canonicalization
+(making equal types one object), hash consing, const generics (value arguments taken seriously).
 
 ---
 
-## Normal completion and reachability
+## Kinds / kinding
 
-**Problem:** "every path returns a value" and "there is no dead code after a return" can be enforced
-structurally at first — one `return`, positioned last — and that rule dies the moment `if` exists.
-The replacement is not a search for `return` statements; it is a per-statement judgment of whether
-control can reach the statement after it.
+**Problem:** once types take arguments, some things that look like types are not types. `ptr` alone
+cannot annotate a variable; `ptr(i32)` can. Without a word for that distinction, the checker either
+allows nonsense or forbids it by accident.
 
 **Shape:**
 
 ```
-completes_normally(stmt) -> bool
+*         the kind of a type            i32, bool, ptr(i32)
+* -> *    takes a type, returns a type  ptr, array-of
+* -> * -> *                             pair, map-of
 
-    return e              -> false
-    abort()               -> false
-    block [s1..sn]        -> completes_normally(sn), and each si must
-                             complete normally for s(i+1) to be reachable
-    if c { a } else { b }  -> completes_normally(a) || completes_normally(b)
-    if c { a }             -> true      # no else: the false path falls through
-    while c { b }          -> true      # may execute zero times
-    everything else        -> true
-
-a function body must NOT complete normally, unless its return type is unit
-a statement following one that does not complete normally is unreachable — an error
+"kind checking" is type checking one level up:
+    ptr(i32)     well-kinded
+    ptr          not a type, only a constructor
+    ptr(ptr)     ill-kinded — ptr is not a type
 ```
 
-**Read:** the Java Language Specification §14.22, "Unreachable Statements", is the best-written
-version anywhere — normative, exhaustive, per-construct, and short enough to read in one sitting.
-C# has the equivalent as reachability plus definite assignment. The Dragon Book covers the general
-dataflow machinery, which is far more than this needs.
+Most languages never expose kinds to the programmer, and a language that only ever *applies*
+constructors never needs the machinery. It becomes load-bearing the moment something quantifies over
+a constructor rather than a type — `T<U>` where `T` is a parameter — which is **higher-kinded
+types**, and materially harder to infer. Knowing the word is mostly how you recognise that a design
+sketch has wandered into it.
 
-**Cost:** the predicate is deliberately syntactic and therefore conservative. `while (true) { }`
-is treated as completing normally by a naive rule even though it cannot, which is why Java
-special-cases constant conditions — and every such special case is a place two compilers disagree
-about whether a program is legal. Keep the rule dumb and documented rather than clever.
+**Read:** Pierce, *TAPL* ch. 29–30 (System Fω). Haskell's `:kind` in GHCi is the cheapest way to see
+kinds in action.
 
-**Related:** definite assignment analysis, bottom type as the same information carried in the type,
-dead code elimination, mandatory return.
+**Cost:** naming kinds in a small language's documentation usually costs more than it buys. Its
+value here is diagnostic — it tells you which side of a hard line a feature sketch has landed on.
+
+**Related:** higher-kinded types, associated types (the route that avoids them), type constructor,
+dependent types (where a type takes a *value* argument, e.g. array lengths).
+
+---
+
+## Transitive const / deep const
+
+**Problem:** `const` in C and C++ stops at one level. `const struct Node *n` prevents writing
+`n->kind` but not `n->next->kind`, because `next` is an ordinary mutable pointer. A language that
+wants "const all the way down" must decide *where* the propagation happens, and the obvious place is
+wrong.
+
+**Shape:**
+
+```
+shallow (C, C++):  const applies to the immediate object only
+
+deep (D):          const propagates through every indirection reachable from it
+
+the mechanism question — where is deepness enforced?
+
+    at the binding    a const binding rewrites the types of what it holds
+                      → the declared type and the actual type disagree
+
+    at address-of     taking a reference to a const place yields a
+                      const reference; no writable reference to a
+                      const place can ever be obtained
+                      → local rule, no rewriting, deepness falls out
+```
+
+The second form is the one that composes. It keeps binding immutability a property of the *place*
+and pointee immutability a property of the *type*, two independent axes, without either silently
+editing the other. Deepness then holds not because const spreads but because the writable capability
+was never issued.
+
+**Read:** D language specification, "Type Qualifiers — const and immutable". Zig's pointer
+mutability table (`const x: *T` vs `var x: *const T`) is the clearest four-cell statement of the two
+axes. C++'s `propagate_const` is the retrofit and shows the cost of not having it from the start.
+
+**Cost:** deep const is a rule someone must keep enforcing, not a property that falls out — see
+interior mutability.
+
+**Related:** interior mutability (the documented escape hatch), variance (why the rule cannot pass
+under a writable constructor), capability-based reasoning, bitcast (the other way to defeat it).
+
+---
+
+## Interior mutability
+
+**Problem:** "immutable means nothing can change through this" is a rule with a hole in every
+language that has one. Reference counting, memoization, and lazy initialization all need to mutate
+through a shared read-only handle, so the language either provides a sanctioned hole or people cast
+the qualifier away.
+
+**Shape:**
+
+```
+outer type says: no writes through this reference
+inner cell says: writes permitted, discipline enforced elsewhere
+
+Cell / RefCell / atomics — the write is legal, the checking moved
+from compile time to runtime (or to a proof the author supplies)
+```
+
+The point of naming it is not to build one. It is that "deep const" and "immutable" are claims about
+what the *type system* enforces, and every mature language with such a claim also ships a documented
+exception. Designing the guarantee without deciding the exception means the exception arrives later
+as an unprincipled cast.
+
+**Read:** *The Rustonomicon*, "Interior Mutability". Rust's `std::cell` documentation for the
+sanctioned forms. C's `mutable`-equivalent is `const_cast`, which is the unprincipled version and
+undefined when the object was genuinely const.
+
+**Related:** transitive const, const-cast / `@constCast` (undefined when the original was const),
+capability-based reasoning.
+
+---
+
+## Variance
+
+**Problem:** a conversion that is obviously safe on its own is not automatically safe underneath a
+type constructor. If `Cat` is acceptable where `Animal` is expected, is `array of Cat` acceptable
+where `array of Animal` is expected? The intuitive "yes" is unsound, and the counterexample is one
+function call long.
+
+**Shape:**
+
+```
+covariant       T acceptable for U  =>  F(T) acceptable for F(U)
+contravariant   T acceptable for U  =>  F(U) acceptable for F(T)
+invariant       neither
+
+rule of thumb:
+    read-only positions may be covariant
+    writable positions must be invariant
+
+the counterexample, every time:
+    accept F(T) where F(U) is expected
+    the callee stores a legitimate U into it
+    the caller reads it back believing it is a T
+```
+
+For qualifiers specifically this is why "const may be added" holds at the outermost level and
+nowhere deeper. C states it directly: pointer-to-`T` converts to pointer-to-`const T`, but
+pointer-to-pointer-to-`T` does not convert to pointer-to-pointer-to-`const T` — the qualifications
+must match. Java made mutable arrays covariant, hit exactly this, and pays for it with a runtime
+check on every array store forever.
+
+**Read:** ISO C §6.5.16.1 on qualified assignment. Pierce, *TAPL* ch. 15.2. Java's
+`ArrayStoreException` as the cautionary tale, and C#'s array covariance as the same mistake made
+twice knowingly.
+
+**Related:** subsumption (the rule variance constrains), depth-zero restriction, bottom type (the one
+relation that is safe everywhere because there is no value to store).
+
+---
+
+## Mutability polymorphism (`inout`)
+
+**Problem:** once `&T` and `&const T` are different types, a function that only *reads* through its
+argument still has to pick one — and picking the read-only one is right but loses the caller's
+mutability on the way out. The result is every accessor written twice, `get` and `get_mut`, differing
+only in a qualifier.
+
+**Shape:**
+
+```
+without it:
+    fn first(xs: &const List) -> &const Item
+    fn first_mut(xs: &List) -> &Item        — identical body
+
+with it:
+    fn first(xs: &inout List) -> &inout Item
+    the qualifier is a parameter; the return borrows the argument's
+```
+
+This is a real gap rather than an ergonomic complaint: the two bodies are textually identical, so
+the duplication is pure, and it multiplies with every accessor. D added a whole type qualifier for
+it. Rust has not, and `get`/`get_mut` pairs are the visible consequence throughout its standard
+library.
+
+**Read:** D language specification, "Functions — Inout Functions". Rust's `std::collections` API as
+the counterexample, where the duplication is right there in the method list.
+
+**Cost:** it is a fourth qualifier interacting with the other three, and D's own documentation on the
+transitivity rules is not short. Worth knowing the problem has a name before deciding to live with
+the duplication.
+
+**Related:** transitive const, variance, subsumption, generics (the general form of the same
+parameterisation).
+
+---
+
+## Constant expression vs. const-qualified object
+
+**Problem:** in C these are two different things wearing one keyword. A `const size_t n = 64;` is
+**not** a constant expression, so it cannot size an array, label a `case`, or width a bitfield. C++
+programmers hit this constantly. Separately, a language with array types in its type system needs to
+say what expressions may appear in a type at all.
+
+**Shape:**
+
+```
+const-qualified object   a runtime value that may not be written
+constant expression      a value the translator can compute
+
+C23:
+    constexpr size_t N = 64;   usable as an array size and a case label
+    const size_t n = 64;       not a constant expression
+
+in a language with [N]T, the question is which expressions
+may occupy N:
+    literals only          simplest; no arithmetic in types
+    constant expressions   requires a compile-time evaluator
+```
+
+The second half is the part that bites language design. `[25]i32` puts a value inside a type for the
+first time, and "does `[2+3]i32` parse" is not a syntax question — it asks whether the type checker
+must evaluate expressions, which is the thin end of compile-time evaluation and eventually of
+dependent types.
+
+**Read:** ISO C §6.6 on constant expressions. C23's `constexpr` (N2645). Hare's three-way split —
+`let` for mutable bindings, `const` for immutable ones, `def` for compile-time constants — is the
+clean version of separating the two meanings.
+
+**Related:** const generics, dependent types, multi-stage programming (`comptime`), constant folding.
+
+---
+
+## Effectively final
+
+**Problem:** a variable that is never reassigned is already immutable in fact, so a language can
+compute constness rather than requiring it to be declared. That works, and it is the wrong trade —
+knowing why is what stops the keyword being dropped as redundant.
+
+**Shape:**
+
+```
+inferred:   scan the scope; if no assignment names it, treat as final
+
+declared:   the programmer states it; the checker verifies
+
+the asymmetry:
+    inference derives the rule FROM the code, so the code is
+    always consistent with what was inferred — a stray write does
+    not make the program wrong, it makes the variable mutable
+
+    a declaration is the only artifact that can be CONTRADICTED
+```
+
+Java computes this (a variable is *effectively final* if never reassigned, which is what lets it be
+captured by a lambda) and kept the `final` keyword anyway. The inferred version cannot catch a
+mistake; it can only describe one. The declared version also answers "does this still hold what line
+4 gave it" in O(1) rather than a scan of the scope.
+
+There is a third option worth knowing: Zig keeps `const` opt-in but makes a mutable binding that is
+never mutated a **compile error**, so both spellings carry a contract without flipping the default.
+
+**Read:** JLS §4.12.4 (effectively final). Zig's "local variable is never mutated" diagnostic and its
+documented exemptions — globals, struct-scoped variables, and locals whose address is taken.
+
+**Cost:** inference stops being sound as soon as writes can happen through an alias; see escape
+analysis.
+
+**Related:** escape analysis, transitive const, capability-based reasoning.
+
+---
+
+## Escape analysis
+
+**Problem:** any claim of the form "nothing writes to this variable" or "this allocation does not
+outlive this frame" is only true if no reference to it gets away — out through a return value, into
+a parameter, onto a data structure that outlives the scope. Determining that is not a local question,
+and assuming it is produces a check that is quietly unsound.
+
+**Shape:**
+
+```
+for each allocation or binding:
+    does any reference to it reach
+        a return value?
+        a parameter of a function that might store it?
+        a longer-lived structure?
+
+    no  -> it does not escape; stack-allocate, or trust the local claim
+    yes -> it escapes; assume nothing
+```
+
+Two uses, opposite ends of the compiler. Optimisation: an object that does not escape can be
+stack-allocated or scalar-replaced instead of heap-allocated — the main reason Java and Go can afford
+so much allocation. Checking: a local rule like "never mutated" needs it as soon as an alias can be
+formed, unless the language makes *taking a writable alias* its own syntactic act, in which case the
+question collapses back to a local one.
+
+That last clause is the useful part of knowing the name: it tells you which language design choices
+let you avoid the analysis entirely rather than implement it.
+
+**Read:** Choi et al., *Escape Analysis for Java* (OOPSLA 1999). Go's `-gcflags=-m` prints its escape
+decisions, which is the cheapest way to see one working.
+
+**Cost:** interprocedural and expensive, and conservative answers are the norm. If a design can avoid
+needing it, that is worth more than implementing it well.
+
+**Related:** intraprocedural vs. interprocedural analysis, region-based memory management, effectively
+final, capability-based reasoning.
+
+---
+
+## Intraprocedural vs. interprocedural analysis
+
+**Problem:** whether a check must look inside other functions decides its cost, its precision, and
+whether it can run at all on incomplete programs. Designs slide from one to the other by accident,
+usually while adding a feature that looks unrelated.
+
+**Shape:**
+
+```
+intraprocedural   one function body at a time; calls are summarised
+                  by their signatures
+                  cost O(function), composes with separate compilation
+
+interprocedural   follows calls into bodies
+                  cost grows with the call graph; needs the whole program
+
+the design lever: make signatures carry enough that call sites can be
+resolved without opening the callee
+```
+
+The lever is the point. "Does this call write through my argument?" is interprocedural if the answer
+lives in the callee's body, and intraprocedural if the parameter's declared type says so. A type
+system is, among other things, a mechanism for turning interprocedural questions into local ones,
+which is why adding a qualifier can be cheaper than adding an analysis.
+
+**Read:** Nielson, Nielson and Hankin, *Principles of Program Analysis*, ch. 2 for the framing.
+Rust's borrow checker is the large worked example of buying locality with signatures.
+
+**Related:** escape analysis (the canonical interprocedural one), symbol table with scope chain,
+whole-program optimisation, separate compilation.
+
+---
+
+## Region-based memory management
+
+**Problem:** arenas work because the programmer knows a lifetime the language does not. Region
+inference is the version where the *compiler* works it out — every allocation is assigned to a
+region, regions nest, and a whole region is freed at once with no per-object bookkeeping and no
+collector.
+
+**Shape:**
+
+```
+annotate each allocation with a region variable
+infer, per program point, which region an allocation belongs to
+regions nest with lexical structure:
+
+    letregion r in
+        ... allocations tagged r ...
+    end          -- entire region deallocated here
+
+a value may not outlive its region — that constraint is the analysis
+```
+
+This is worth knowing for two reasons that are not "implement it". First, it is the formal account of
+what an arena allocator does by hand, so it tells you what a manual arena is trading away: the
+compiler is not checking that nothing outlives the teardown. Second, it is the ancestor of lifetime
+and borrow checking — the question "does this reference outlive what it points at" is a region
+constraint, and a language that adds references without answering it has reintroduced dangling
+pointers no matter what its type syntax looks like.
+
+**Read:** Tofte and Talpin, *Region-Based Memory Management* (Information and Computation, 1997).
+Cyclone's regions are the C-shaped version. Grossman et al., *Region-Based Memory Management in
+Cyclone* (PLDI 2002).
+
+**Cost:** full inference is heavy machinery and famously produces bad diagnostics when it fails —
+Cyclone's reputation. Most projects want the manual arena and an explicit rule about what may hold a
+pointer into it.
+
+**Related:** arena / bump allocation (the manual version), escape analysis, lifetimes and borrow
+checking, capability-based reasoning.
 
 ---
 
@@ -1096,39 +1047,6 @@ about debuggability does. The modern web equivalent is source maps, which solve 
 with a side file instead of inline directives.
 
 **Related:** source maps, DWARF, debug information, `#pragma` line control.
-
----
-
-## Zero-sized types and unit erasure
-
-**Problem:** a type with exactly one value carries no information, so storing it, passing it and
-returning it are all pure overhead. A backend that treats it as an ordinary type emits loads and
-stores of nothing; a target language that cannot express an object of that type — C's `void` — will
-reject the output outright.
-
-**Shape:**
-
-```
-size_of(unit) == 0
-
-at codegen:
-    declaration of a zero-sized local -> emit nothing
-    assignment of a zero-sized value  -> emit the RHS for its effects, discard
-    parameter of zero-sized type      -> drop from the emitted signature
-    return of zero-sized type         -> emit `return;`
-```
-
-**Read:** the Rust reference on zero-sized types, and the Rustonomicon's ZST chapter for what breaks
-— notably that allocating one must not return null. Rust's `()`, `PhantomData` and empty structs are
-all ZSTs. Haskell's `()` and ML's `unit` are the same idea without the layout concern, since neither
-promises a memory representation.
-
-**Cost:** erasure means the emitted code no longer corresponds one-to-one with the source tree, so
-anything comparing the two — a differential interpreter, a `#line` scheme, a source map — has to
-agree about what vanished. Distinct from an *uninhabited* type, which has zero values rather than
-one; the two are easy to conflate and behave differently in a checker.
-
-**Related:** unit type, newtype erasure, `#line` directives, differential testing.
 
 ---
 
