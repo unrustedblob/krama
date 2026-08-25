@@ -9,7 +9,7 @@
 
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
-**Working on:** Arena — iteration 1 complete, unit test suite in progress
+**Working on:** Arena — iteration 1 testing, basic tests complete
 
 **Blocked on:** -
 
@@ -138,6 +138,48 @@ the padding rather than round the address up, and why forming a pointer past one
 defect even when it never fires. Resolved by working the wrap case on a small address space by hand
 rather than accepting the formula. This is a candidate for a standalone workout — a bump allocator
 over a `static` buffer, outside funC — per the friction convention below.
+
+**Stubbed.** See the *Deliberately incomplete* table. Mark/release, per-type alignment, and ASan
+poisoning of arena memory are all absent by decision, not by oversight.
+
+**Next.**
+
+1. Complete the arena unit tests, failure paths included.
+2. Decision records for the arena's implementation choices — no capacity parameter, separate block
+   and data allocations over a flexible array member, pointer cursor with a `size_t` companion.
+3. The fatal-error module and the assertion mechanism, which STYLE.md §13 defers to "before the
+   lexer" and which the arena has already forced into the open.
+4. AST node definitions.
+
+---
+
+### 2026-08-25 — Arena iteration 1, Unit Testing (1)
+
+**Did.**
+
+1. Tested `arena_create` and validated initial state of the arena.
+2. Tested three scenarios of allocation:
+  a. **Regular Case**: The request is within the available space in the current block.
+  b. **Tight Fit**: The request is exactly the sapce available in the current block.
+
+**Worked.**
+
+1. Arena created correctly, initial capacity matches the fixed block initial capacity.
+2. Regular case allocation working as expected, cursor and available space checked and verfied cursor/retrned pointer is aligned
+
+
+**Didn't.**
+
+1. The tight fit case failed.
+
+| Review Pass | Issue # | Bug | Resolution |
+|---|---|--- | ---|
+| 1 | [#6](https://github.com/unrustedblob/funC/issues/6) | Program aborts when passing allocationr equest with exact fit | The contraint was updated to handle teh equal scenario as well |
+
+
+**Friction.**
+
+- n/a
 
 **Stubbed.** See the *Deliberately incomplete* table. Mark/release, per-type alignment, and ASan
 poisoning of arena memory are all absent by decision, not by oversight.
