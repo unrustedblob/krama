@@ -114,7 +114,7 @@ static void add_block(struct Arena *arena, size_t min_sz)
         // at BLOCK_MAX_CAP
         size_t next_cap = arena->head->cap * GROWTH_FACTOR;
         while (next_cap < min_sz) {
-                next_cap *= 2;
+                next_cap *= GROWTH_FACTOR;
         }
         size_t final_cap = (next_cap > BLOCK_MAX_CAP) ? BLOCK_MAX_CAP : next_cap;
         struct Block_ *block = create_block(final_cap);
