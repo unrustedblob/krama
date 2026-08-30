@@ -148,6 +148,10 @@ static struct TestCounter test_arena(void)
               "Expected %zu | Got %zu",
               old_cap, arena_cap, arena_growth_factor, (arena_cap / old_cap));
 
+        CHECK(((uintptr_t)p % alignof(max_align_t) == 0), counter,
+              "Pointer returned is aligned. Pointer: %p, Align: %zu", (void *)p,
+              alignof(max_align_t));
+
         // -----------------------------------------------------
         // [TEST 5] - Max Fit
         // Request allocation of maximum possible capacity.
@@ -155,7 +159,7 @@ static struct TestCounter test_arena(void)
 
         printf("\n[TEST 5] - Max Fit\n---------------------------------------------\n");
 
-        p = arena_alloc(arena, block_max_cap);
+        p = arena_alloc(arena, block_max_cap - (alignof(max_align_t) - 1));
         arena_cap = arena_get_capacity(arena);
 
         CHECK((arena_cap == block_max_cap), counter,

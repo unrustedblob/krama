@@ -16,6 +16,7 @@ constexpr size_t MB = KB * 1024;
 constexpr size_t BLOCK_INIT_CAP = 64 * KB;
 constexpr size_t BLOCK_MAX_CAP = 5 * MB;
 constexpr size_t GROWTH_FACTOR = 2;
+constexpr size_t BLOCK_MAX_ALIGNMENT = 64;
 
 // A simple list node for a block of data
 struct Block_ {
@@ -36,8 +37,8 @@ static struct Arena *create_arena(size_t cap);
 static struct Block_ *create_block(size_t cap);
 static bool check_alignment(size_t align);
 static void move_cursor(struct Arena *arena, size_t size);
-static void add_block(struct Arena *arena, size_t min_sz);
-static void make_align(struct Arena *arena, size_t align);
+static size_t compute_padding(struct Arena *arena, size_t align);
+static void add_block(struct Arena *arena, size_t size, size_t align);
 static void *allocate(struct Arena *arena, size_t size, size_t align);
 
 struct Arena *arena_create(void)
@@ -90,12 +91,22 @@ void *arena_alloc(struct Arena *arena, size_t size)
 // TODO; Eventually should become the exposed API not a helper.
 static void *allocate(struct Arena *arena, size_t size, size_t align)
 {
+        static_assert(BLOCK_MAX_ALIGNMENT < BLOCK_MAX_CAP,
+                      "Block max capactiy is too big an alignment...");
+
         FATAL(!check_alignment(align), FATAL_PATH_ABORT, "Alignment must be a power of 2. Got %zu",
               align);
-        make_align(arena, align);
-        if (arena->available < size) {
-                add_block(arena, size);
+
+        FATAL(align > BLOCK_MAX_ALIGNMENT, FATAL_PATH_ABORT,
+              "Requested alignment (%zu) greater than maximum allowed (%zu)", align,
+              BLOCK_MAX_ALIGNMENT);
+
+        size_t padding = compute_padding(arena, align);
+        if (padding > arena->available || size > arena->available - padding) {
+                add_block(arena, size, align);
+                padding = compute_padding(arena, align);
         }
+        move_cursor(arena, padding);
         void *p = arena->cursor;
         move_cursor(arena, size);
         return p;
@@ -104,16 +115,16 @@ static void *allocate(struct Arena *arena, size_t size, size_t align)
 // Adds a block to the block list. Computes a feasible size for the new block
 // based on the requested size, capped at BLOCK_MAX_CAP. The new block is
 // prepended to the existing one.
-static void add_block(struct Arena *arena, size_t min_sz)
+static void add_block(struct Arena *arena, size_t size, const size_t align)
 {
-        FATAL(min_sz > BLOCK_MAX_CAP, FATAL_PATH_ABORT,
-              "Requested size (%zu) greater than allowed maximum capacity (%zu)", min_sz,
-              BLOCK_MAX_CAP);
+        FATAL(size > BLOCK_MAX_CAP - (align - 1), FATAL_PATH_ABORT,
+              "Requested size (%zu) + padding (%zu) greater than allowed maximum capacity (%zu)",
+              size, align - 1, BLOCK_MAX_CAP);
 
         // Find the required size for new buffer to malloc beforehand, caps off
         // at BLOCK_MAX_CAP
         size_t next_cap = arena->head->cap * GROWTH_FACTOR;
-        while (next_cap < min_sz) {
+        while (next_cap < size) {
                 next_cap *= GROWTH_FACTOR;
         }
         size_t final_cap = (next_cap > BLOCK_MAX_CAP) ? BLOCK_MAX_CAP : next_cap;
@@ -149,14 +160,9 @@ static bool check_alignment(size_t align)
         return (align & (align - 1)) == 0;
 }
 
-static void make_align(struct Arena *arena, size_t align)
+static size_t compute_padding(struct Arena *arena, size_t align)
 {
-        size_t padding = (0 - (uintptr_t)arena->cursor) & (align - 1);
-        if (padding > arena->available) {
-                add_block(arena, padding);
-        } else {
-                move_cursor(arena, padding);
-        }
+        return (0 - (uintptr_t)arena->cursor) & (align - 1);
 }
 
 static void move_cursor(struct Arena *arena, size_t size)
