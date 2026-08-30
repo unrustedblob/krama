@@ -3,6 +3,9 @@ build/*
 .refs/*
 .sparring/*
 
+#repomix outputs
+*repomix*
+
 # Asisstants
 CLAUDE.md
 
