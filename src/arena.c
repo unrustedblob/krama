@@ -119,7 +119,7 @@ static void add_block_(struct Arena *restrict arena, size_t min_sz)
         }
         size_t final_cap = (next_cap > BLOCK_MAX_CAP) ? BLOCK_MAX_CAP : next_cap;
         struct Block_ *block = block_create_(final_cap);
-        block->next = arena->head->next;
+        block->next = arena->head;
         *arena = (struct Arena){
                 .head = block,
                 .cursor = block->buffer,
