@@ -38,6 +38,9 @@ place.
 | D-021 | String interning for identifiers | Deferred | 07 |
 | D-022 | Macros permitted for what only macros can do | Decided | 08 |
 | D-023 | Assistant interaction rules live in CLAUDE.md | Decided | 09 |
+| D-024 | Arena initial capacity is fixed, not caller-supplied | Decided | ## |
+| D-025 | `CHECK` stays a macro until the lexer tests land | Deferred | ## |
+| D-026 | `arena_reset` deferred past milestone 2 | Deferred | ## |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -370,6 +373,120 @@ return to caller-supplied capacity for the AST arena.
 
 **Reference.** STYLE.md §9.2 (growth policy this formalizes); D-003 (arena allocator decision this
 refines).
+
+---
+
+### D-025 — `CHECK` stays a macro until the lexer tests land
+
+**Status:** Deferred · **Session:** ## · **Spec:** n/a (test suite) — STYLE.md §8.4
+
+**Deferred.** `CHECK` in `tests/test_arena.c` remains a function-like macro. It does not currently do
+any of the five jobs STYLE.md §8.4 lists, so §8.4 as written says it should have been a function.
+The exception is deliberate and time-boxed: the question is reopened when the lexer tests give
+`CHECK` a second consumer.
+
+**Rejected.**
+
+- *Convert it to a function now.* Correct under §8.4 as the rule stands, and cheap: the counter is
+  taken by name and mutated, which a `struct TestCounter *` parameter does identically, and the
+  printf-style arguments would go through `vfprintf` exactly as `fatal` already does. Rejected as
+  premature — with a single consumer there is no evidence about what the interface wants, and the
+  conversion costs the same whenever it happens.
+- *Keep it as a macro and add `#cond` to justify it.* Would settle the question permanently in the
+  macro's favour and would genuinely improve failure output, since a red test would print the source
+  text of the condition alongside its message. Rejected because it inverts §8.4's test: the rule is
+  *name the job the macro does*, not *find a job for the macro already written*. If the failure
+  output wants the condition text, that should be decided on its own merits and the macro then
+  justified by it — not the reverse.
+- *Leave the macro uncommented.* The §14 checklist now requires every macro to name its job, and
+  silence would read as an oversight a year from now rather than as a deferral with a trigger.
+
+**Why.** §8.4's discriminator is whether the macro does work that has no non-macro spelling. `CHECK`
+currently does not, which makes converting it the default answer. But the test suite has exactly one
+consumer, and one call site is not enough evidence about what an interface wants — the shape that
+looks obvious with one caller is routinely wrong with two. The lexer tests are the second consumer
+and arrive soon enough that waiting costs a comment rather than a milestone. Deferring with a named
+trigger is cheaper than converting now and converting back.
+
+**Consequences.**
+
+- `CHECK` carries a §8.4 comment stating that it does not yet name a job, written as
+  `// TODO(D-025): ...` per §10.4 so the deferral is traceable rather than looking like a lapse.
+- A documented exception to §8.4 now exists. It is an exception, not an amendment — §8.4 is
+  unchanged and no other macro inherits this latitude.
+- The question at the trigger is narrow and already framed: **does the failure output want the
+  condition's source text?** If yes, `CHECK` is a macro permanently and its comment names
+  stringification. If no, it becomes an ordinary function taking `struct TestCounter *`.
+- This lands in the same conversation as STYLE.md §13's deferred testing conventions — corpus
+  layout, `.func` / `.expected` naming, driver contract — which have the same trigger.
+
+**Revisit when.** The lexer tests land and `CHECK` has a second consumer.
+
+**Reference.** D-022, which established the name-the-job test this entry is a temporary exception to.
+
+---
+
+### D-026 — `arena_reset` deferred past milestone 2
+
+**Status:** Deferred · **Session:** ## · **Spec:** n/a (implementation) — refines D-003
+
+**Deferred.** The arena has no reset operation. Nothing in milestone 1 reclaims arena memory early:
+the AST is allocated during parsing and read by the type checker, the code generator, and the
+differential interpreter, so no phase boundary exists at which any of it becomes dead. The
+declaration currently in `arena.h` is removed rather than kept as a no-op stub.
+
+**The question.** Should the arena be able to return to an earlier point — releasing everything
+allocated since — without being destroyed and recreated? The general technique is mark/release: save
+the current block and cursor as a value, restore them later, and either free or retain the blocks
+chained since. Resetting to the arena's base is the degenerate case where the mark is the beginning.
+
+**Rejected.**
+
+- *Ship it as a no-op returning `nullptr`.* Its current form. Genuinely tempting because the API then
+  looks complete and the signature is settled early. Rejected because a public function that accepts
+  a call and silently does nothing is worse than an absent one: a caller who believes memory was
+  reclaimed gets no error, no diagnostic, and no crash — just an arena that keeps growing. An
+  absent function is a compile error, which is the correct outcome for calling something that does
+  not exist yet.
+- *Implement reset now, since it is only a few lines.* True for the reset-to-base case: restore the
+  cursor to the first block's buffer, and free or retain the rest of the chain. Rejected because
+  neither branch of that choice can be made without a caller. Freeing the chain is right if resets
+  are rare; retaining it for reuse is right if they are frequent and the same sizes recur — and
+  nothing currently generates either pattern to decide from.
+- *Implement full mark/release rather than reset.* The more general and more useful operation, and
+  the one the eventual callers probably want. Rejected on the same ground and more strongly: it adds
+  a lifetime rule the plain arena had abolished, where a pointer's validity depends on a scope
+  invisible at the use site — and STYLE.md §9.2 already records that ASan cannot see arena bugs,
+  since nothing is freed. Adopting that hazard before anything needs it is the wrong order.
+
+**Why.** The arena's bargain is allocate-never-free-teardown-once, and every milestone 1 allocation
+lives to teardown. A reclaim operation with no caller cannot be designed, only guessed at — the two
+open sub-questions (free the chain or retain it; reset-to-base or a general mark) both have answers
+that depend entirely on the access pattern of the code that will call it. Waiting costs nothing,
+because adding the operation later changes no existing signature and invalidates no existing
+pointer.
+
+**Consequences.**
+
+- `arena_reset` is removed from `arena.h` and `arena.c`. There is no stub.
+- `PROJECT.md`'s *Deliberately incomplete* table carries the absence, so review does not report it
+  as missing.
+- The arena's public surface for milestone 1 is exactly `arena_create`, `arena_alloc`,
+  `arena_destroy`, plus the `FUNC_TEST_SUITE` accessors.
+- When this is reopened, mark/release should be evaluated alongside plain reset rather than after
+  it. Reset-to-base is a special case of mark/release, so implementing reset first and generalising
+  later means writing the block-disposal policy twice.
+
+**Revisit when.** A phase acquires arena memory that provably dies before teardown. The two expected
+triggers, neither in milestone 2: **multi-file compilation**, where each file's AST dies once that
+file's output is written, making per-file reset the natural unit; and **code generation**, if it
+accumulates working structures per function that are dead once that function is emitted. Neither is
+speculative-but-vague — each has an identifiable point at which the memory is known dead, which is
+exactly the evidence this entry is waiting for.
+
+**Reference.** D-003 (the arena decision this refines); STYLE.md §9.2 (allocate, never free, one
+teardown at exit). Ryan Fleury, *Untangling Lifetimes: The Arena Allocator*, for the mark/release
+form and the scratch-arena pattern it enables.
 
 ---
 
