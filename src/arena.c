@@ -2,8 +2,10 @@
 // chaining blocks.
 
 #include "./arena.h"
+#include "./fatal.h"
 
 #include <assert.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -30,7 +32,6 @@ struct Arena {
         size_t available;
 };
 
-[[noreturn]] static void fail_alloc();
 static struct Arena *arena_create_(size_t cap);
 static struct Block_ *block_create_(size_t cap);
 static bool check_alignment_(size_t align);
@@ -38,13 +39,6 @@ static void move_cursor_(struct Arena *restrict arena, size_t size);
 static void add_block_(struct Arena *restrict arena, size_t min_sz);
 static void make_align_(struct Arena *restrict arena, size_t align);
 static void *arena_alloc_(struct Arena *restrict arena, size_t size, size_t align);
-
-// TODO: Should go into its own module
-[[noreturn]] static void fail_alloc()
-{
-        fprintf(stderr, "Unable to allocate memory.\n");
-        exit(1);
-}
 
 struct Arena *arena_create(void)
 {
@@ -55,16 +49,19 @@ struct Arena *arena_create(void)
 // This should be called only once per arena needed.
 static struct Arena *arena_create_(size_t cap)
 {
-        assert(cap <= BLOCK_MAX_CAP);
-        struct Arena *arena = malloc(sizeof(struct Arena));
-        if (!arena) {
-                fail_alloc();
-        }
-        struct Block_ *block = block_create_(cap);
-        arena->head = block;
-        arena->cursor = block->buffer;
-        arena->available = block->cap;
+        FATAL(cap > BLOCK_MAX_CAP, ABORT,
+              "Requested capacity (%zu) greater than max allowed capacity (%zu)", cap,
+              BLOCK_MAX_CAP);
 
+        struct Arena *arena = malloc(sizeof(struct Arena));
+        FATAL(arena == nullptr, EXIT, "Unable to allocate memory");
+
+        struct Block_ *block = block_create_(cap);
+        *arena = (struct Arena){
+                .head = block,
+                .cursor = block->buffer,
+                .available = block->cap,
+        };
         return arena;
 }
 
@@ -72,19 +69,16 @@ static struct Arena *arena_create_(size_t cap)
 static struct Block_ *block_create_(size_t cap)
 {
         struct Block_ *block = malloc(sizeof(struct Block_));
-        if (!block) {
-                fail_alloc();
-        }
+        FATAL(block == nullptr, EXIT, "Unable to allocate memory");
 
         void *buffer = malloc(cap);
-        if (!buffer) {
-                fail_alloc();
-        }
+        FATAL(buffer == nullptr, EXIT, "Unable to allcoate memory");
 
-        block->next = nullptr;
-        block->buffer = buffer;
-        block->cap = cap;
-
+        *block = (struct Block_){
+                .next = nullptr,
+                .buffer = buffer,
+                .cap = cap,
+        };
         return block;
 }
 
@@ -109,13 +103,13 @@ static void *arena_alloc_(struct Arena *restrict arena, size_t size, size_t alig
 }
 
 // Adds a block to the block list. Computes a feasible size for the new block
-// based on the requested size, this stops at BLOCK_MAX_CAP. The new block is
+// based on the requested size, capped at BLOCK_MAX_CAP. The new block is
 // prepended to the existing one.
 static void add_block_(struct Arena *restrict arena, size_t min_sz)
 {
-        if (min_sz > BLOCK_MAX_CAP) {
-                fail_alloc();
-        }
+        FATAL(min_sz > BLOCK_MAX_CAP, ABORT,
+              "Requested size (%zu) greater than allowed maximum capacity (%zu)", min_sz,
+              BLOCK_MAX_CAP);
 
         // Find the required size for new buffer to malloc beforehand, caps off
         // at BLOCK_MAX_CAP
@@ -124,17 +118,16 @@ static void add_block_(struct Arena *restrict arena, size_t min_sz)
                 next_cap *= 2;
         }
         size_t final_cap = (next_cap > BLOCK_MAX_CAP) ? BLOCK_MAX_CAP : next_cap;
-
         struct Block_ *block = block_create_(final_cap);
-
         block->next = arena->head->next;
-        arena->head = block;
-        arena->cursor = block->buffer;
-        arena->available = block->cap;
+        *arena = (struct Arena){
+                .head = block,
+                .cursor = block->buffer,
+                .available = block->cap,
+        };
 }
 
 // TODO: Implement this function perhaps as part of milestone 2.
-// This will be commented out in the header.
 void *arena_reset(/* struct Arena *arena */)
 {
         return nullptr;
