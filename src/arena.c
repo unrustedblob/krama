@@ -1,9 +1,10 @@
 // This is the implementation of the Arena interface. A single arena with
 // chaining blocks.
 
+// TODO(D-026): Implement arena_reset - expected past milestone 2.
+
 #include "arena.h"
 
-#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -37,7 +38,7 @@ static struct Arena *create_arena(size_t cap);
 static struct Block_ *create_block(size_t cap);
 static bool check_alignment(size_t align);
 static void move_cursor(struct Arena *arena, size_t size);
-static size_t compute_padding(struct Arena *arena, size_t align);
+static size_t compute_padding(const struct Arena *arena, size_t align);
 static void add_block(struct Arena *arena, size_t size, size_t align);
 static void *allocate(struct Arena *arena, size_t size, size_t align);
 
@@ -137,9 +138,6 @@ static void add_block(struct Arena *arena, size_t size, const size_t align)
         };
 }
 
-// TODO(D-026): Implement this function - expected past milestone 2.
-void *arena_reset(struct Arena *arena);
-
 // Frees the arena, its contained chained blocks and their respective
 // buffers in reverse order.
 nullptr_t arena_destroy(struct Arena *arena)
@@ -160,7 +158,7 @@ static bool check_alignment(size_t align)
         return (align & (align - 1)) == 0;
 }
 
-static size_t compute_padding(struct Arena *arena, size_t align)
+static size_t compute_padding(const struct Arena *arena, size_t align)
 {
         return (0 - (uintptr_t)arena->cursor) & (align - 1);
 }
