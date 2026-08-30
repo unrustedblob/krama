@@ -14,7 +14,7 @@
         va_end(args);
         fprintf(stderr, "\n");
 
-        if (action == ABORT) {
+        if (action == FATAL_PATH_ABORT) {
                 abort();
         }
         exit(1);

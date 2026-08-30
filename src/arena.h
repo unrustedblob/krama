@@ -3,9 +3,7 @@
 #ifndef FUNC_ARENA_H
 #define FUNC_ARENA_H
 
-#include <stdio.h>
 #include <stddef.h>
-#include <stdint.h>
 
 struct Arena;
 
@@ -19,15 +17,11 @@ struct Arena *arena_create(void);
 
 // Allocates memory on the arena and returns a pointer to the allocated store
 // NOTE: This may cause the arena to grow
-void *arena_alloc(struct Arena *restrict arena, size_t size);
-
-
-// TODO: Currently no-op
- void *arena_reset(/* struct Arena *restrict arena */);
+void *arena_alloc(struct Arena *arena, size_t size);
 
 // Destroys the arena and returns nullptr. This should only be called if the
 // arena was created using `arena_create()`
-nullptr_t arena_destroy(struct Arena *restrict arena);
+nullptr_t arena_destroy(struct Arena *arena);
 
 #ifdef FUNC_TEST_SUITE
 

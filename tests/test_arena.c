@@ -1,6 +1,7 @@
 #include "../src/arena.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 
 struct TestCounter {
@@ -12,6 +13,7 @@ static_assert((sizeof(struct TestCounter) <= 16), "struct size should be registe
 
 static struct TestCounter test_arena(void);
 
+// TODO(D-025): Possible function
 #define CHECK(cond, test_counter, ...)                \
         do {                                          \
                 if (!(cond)) {                        \

@@ -2,7 +2,6 @@
 // chaining blocks.
 
 #include "./arena.h"
-#include "./fatal.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -10,6 +9,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "./fatal.h"
 
 constexpr size_t KB = 1024;
 constexpr size_t MB = KB * 1024;
@@ -32,31 +33,31 @@ struct Arena {
         size_t available;
 };
 
-static struct Arena *arena_create_(size_t cap);
-static struct Block_ *block_create_(size_t cap);
-static bool check_alignment_(size_t align);
-static void move_cursor_(struct Arena *restrict arena, size_t size);
-static void add_block_(struct Arena *restrict arena, size_t min_sz);
-static void make_align_(struct Arena *restrict arena, size_t align);
-static void *arena_alloc_(struct Arena *restrict arena, size_t size, size_t align);
+static struct Arena *create_arena(size_t cap);
+static struct Block_ *create_block(size_t cap);
+static bool check_alignment(size_t align);
+static void move_cursor(struct Arena *arena, size_t size);
+static void add_block(struct Arena *arena, size_t min_sz);
+static void make_align(struct Arena *arena, size_t align);
+static void *allocate(struct Arena *arena, size_t size, size_t align);
 
 struct Arena *arena_create(void)
 {
-        return arena_create_(BLOCK_INIT_CAP);
+        return create_arena(BLOCK_INIT_CAP);
 }
 
 // Creates the arena header, the block header and the buffer in that order.
 // This should be called only once per arena needed.
-static struct Arena *arena_create_(size_t cap)
+static struct Arena *create_arena(size_t cap)
 {
-        FATAL(cap > BLOCK_MAX_CAP, ABORT,
+        FATAL(cap > BLOCK_MAX_CAP, FATAL_PATH_ABORT,
               "Requested capacity (%zu) greater than max allowed capacity (%zu)", cap,
               BLOCK_MAX_CAP);
 
         struct Arena *arena = malloc(sizeof(struct Arena));
-        FATAL(arena == nullptr, EXIT, "Unable to allocate memory");
+        FATAL(arena == nullptr, FATAL_PATH_EXIT, "Unable to allocate memory");
 
-        struct Block_ *block = block_create_(cap);
+        struct Block_ *block = create_block(cap);
         *arena = (struct Arena){
                 .head = block,
                 .cursor = block->buffer,
@@ -66,13 +67,13 @@ static struct Arena *arena_create_(size_t cap)
 }
 
 // Creates a Block_ on the heap and its associated buffer
-static struct Block_ *block_create_(size_t cap)
+static struct Block_ *create_block(size_t cap)
 {
         struct Block_ *block = malloc(sizeof(struct Block_));
-        FATAL(block == nullptr, EXIT, "Unable to allocate memory");
+        FATAL(block == nullptr, FATAL_PATH_EXIT, "Unable to allocate memory");
 
         void *buffer = malloc(cap);
-        FATAL(buffer == nullptr, EXIT, "Unable to allcoate memory");
+        FATAL(buffer == nullptr, FATAL_PATH_EXIT, "Unable to allcoate memory");
 
         *block = (struct Block_){
                 .next = nullptr,
@@ -84,30 +85,30 @@ static struct Block_ *block_create_(size_t cap)
 
 // TODO: This should eventually be deprecated/removed, callers should pass in
 // requried alignment.
-void *arena_alloc(struct Arena *restrict arena, size_t size)
+void *arena_alloc(struct Arena *arena, size_t size)
 {
-        return arena_alloc_(arena, size, alignof(max_align_t));
+        return allocate(arena, size, alignof(max_align_t));
 }
 
 // TODO; Eventually should become the exposed API not a helper.
-static void *arena_alloc_(struct Arena *restrict arena, size_t size, size_t align)
+static void *allocate(struct Arena *arena, size_t size, size_t align)
 {
-        assert(check_alignment_(align)); // Must be power of 2
-        make_align_(arena, align);
+        assert(check_alignment(align)); // Must be power of 2
+        make_align(arena, align);
         if (arena->available < size) {
-                add_block_(arena, size);
+                add_block(arena, size);
         }
         void *p = arena->cursor;
-        move_cursor_(arena, size);
+        move_cursor(arena, size);
         return p;
 }
 
 // Adds a block to the block list. Computes a feasible size for the new block
 // based on the requested size, capped at BLOCK_MAX_CAP. The new block is
 // prepended to the existing one.
-static void add_block_(struct Arena *restrict arena, size_t min_sz)
+static void add_block(struct Arena *arena, size_t min_sz)
 {
-        FATAL(min_sz > BLOCK_MAX_CAP, ABORT,
+        FATAL(min_sz > BLOCK_MAX_CAP, FATAL_PATH_ABORT,
               "Requested size (%zu) greater than allowed maximum capacity (%zu)", min_sz,
               BLOCK_MAX_CAP);
 
@@ -118,7 +119,7 @@ static void add_block_(struct Arena *restrict arena, size_t min_sz)
                 next_cap *= 2;
         }
         size_t final_cap = (next_cap > BLOCK_MAX_CAP) ? BLOCK_MAX_CAP : next_cap;
-        struct Block_ *block = block_create_(final_cap);
+        struct Block_ *block = create_block(final_cap);
         block->next = arena->head;
         *arena = (struct Arena){
                 .head = block,
@@ -127,15 +128,15 @@ static void add_block_(struct Arena *restrict arena, size_t min_sz)
         };
 }
 
-// TODO: Implement this function perhaps as part of milestone 2.
-void *arena_reset(/* struct Arena *arena */)
-{
-        return nullptr;
-}
+// TODO(D-026): Implement this function perhaps as part of milestone 2.
+// void *arena_reset(struct Arena *arena)
+// {
+//         return nullptr;
+// }
 
 // Frees the arena, its contained chained blocks and their respective
 // buffers in reverse order.
-nullptr_t arena_destroy(struct Arena *restrict arena)
+nullptr_t arena_destroy(struct Arena *arena)
 {
         while (arena->head) {
                 free(arena->head->buffer);
@@ -148,22 +149,22 @@ nullptr_t arena_destroy(struct Arena *restrict arena)
         return nullptr;
 }
 
-static bool check_alignment_(size_t align)
+static bool check_alignment(size_t align)
 {
         return (align & (align - 1)) == 0;
 }
 
-static void make_align_(struct Arena *restrict arena, size_t align)
+static void make_align(struct Arena *arena, size_t align)
 {
         size_t padding = (0 - (uintptr_t)arena->cursor) & (align - 1);
         if (padding > arena->available) {
-                add_block_(arena, padding);
+                add_block(arena, padding);
         } else {
-                move_cursor_(arena, padding);
+                move_cursor(arena, padding);
         }
 }
 
-static void move_cursor_(struct Arena *restrict arena, size_t size)
+static void move_cursor(struct Arena *arena, size_t size)
 {
         assert(size <= arena->available); // Not enough space to move cursor in block
         arena->cursor += size;
