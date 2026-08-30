@@ -14,9 +14,8 @@
         va_end(args);
         fprintf(stderr, "\n");
 
-        if (action == EXIT) {
-                exit(1);
-        } else {
+        if (action == ABORT) {
                 abort();
         }
+        exit(1);
 }
