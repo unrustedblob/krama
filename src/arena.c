@@ -92,7 +92,8 @@ void *arena_alloc(struct Arena *arena, size_t size)
 // TODO; Eventually should become the exposed API not a helper.
 static void *allocate(struct Arena *arena, size_t size, size_t align)
 {
-        assert(check_alignment(align)); // Must be power of 2
+        FATAL(!check_alignment(align), FATAL_PATH_ABORT, "Alignment must be a power of 2. Got %zu",
+              align);
         make_align(arena, align);
         if (arena->available < size) {
                 add_block(arena, size);
@@ -113,7 +114,7 @@ static void add_block(struct Arena *arena, size_t min_sz)
 
         // Find the required size for new buffer to malloc beforehand, caps off
         // at BLOCK_MAX_CAP
-        size_t next_cap = arena->head->cap * 2;
+        size_t next_cap = arena->head->cap * GROWTH_FACTOR;
         while (next_cap < min_sz) {
                 next_cap *= 2;
         }
@@ -165,7 +166,9 @@ static void make_align(struct Arena *arena, size_t align)
 
 static void move_cursor(struct Arena *arena, size_t size)
 {
-        assert(size <= arena->available); // Not enough space to move cursor in block
+        FATAL(size > arena->available, FATAL_PATH_ABORT,
+              "Not enough space to move cursor. Requested: %zu | Available: %zu", size,
+              arena->available);
         arena->cursor += size;
         arena->available -= size;
 }
