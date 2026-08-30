@@ -9,13 +9,13 @@
 
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
-**Working on:** Arena — iteration 1 testing, basic tests complete
+**Working on:** Arena (iteration 1) testing complete and fatal error module in place
 
 **Blocked on:** -
 
-**Last green:** Builds clean under all flags; arena iteration 1 compiles and links
+**Last green:** Tests clean under all flags; arena iteration 1 compiles and links
 
-**Next up:** Finish the arena test suite. Then decision records for the arena's implementation
+**Next up:** Get it reviewed. Initialize in main. Then decision records for the arena's implementation
 choices, then AST node definitions.
 
 **Deliberately incomplete** —
@@ -192,6 +192,39 @@ poisoning of arena memory are all absent by decision, not by oversight.
 3. The fatal-error module and the assertion mechanism, which STYLE.md §13 defers to "before the
    lexer" and which the arena has already forced into the open.
 4. AST node definitions.
+
+---
+
+### 2026-08-30 — Arena iteration 1, Unit Testing Complete
+
+**Did.**
+
+1. Arena API tested, fatal-error module ready
+
+**Worked.**
+
+1. Arena created correctly
+2. Allocations working, tested regular case, max fit and tight fit cases
+3. Tests passing.
+4. The fatal error module is working and records the file, function and line at which the failure occured before caloing the handling function.
+
+**Didn't.**
+
+- n/a
+
+**Friction.**
+
+- n/a
+
+**Stubbed.** See the *Deliberately incomplete* table. Mark/release, per-type alignment, and ASan
+poisoning of arena memory are all absent by decision, not by oversight.
+
+**Next.**
+
+1. Get it reviewed.
+2. Decision records for the arena's implementation choices — no capacity parameter, separate block
+   and data allocations over a flexible array member, pointer cursor with a `size_t` companion.
+3. AST node definitions.
 
 ---
 
