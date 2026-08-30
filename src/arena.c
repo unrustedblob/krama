@@ -1,10 +1,9 @@
 // This is the implementation of the Arena interface. A single arena with
 // chaining blocks.
 
-#include "./arena.h"
+#include "arena.h"
 
 #include <assert.h>
-#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -43,9 +42,8 @@ static void *allocate(struct Arena *arena, size_t size, size_t align);
 
 struct Arena *arena_create(void)
 {
-        static_assert(
-                BLOCK_INIT_CAP < BLOCK_MAX_CAP,
-                "Capacity request higher than BLOCK_MAX_CAP will cause the program to `abort`");
+        static_assert(BLOCK_INIT_CAP < BLOCK_MAX_CAP,
+                      "Capacity request higher than BLOCK_MAX_CAP is invalid");
         return create_arena(BLOCK_INIT_CAP);
 }
 
@@ -128,11 +126,8 @@ static void add_block(struct Arena *arena, size_t min_sz)
         };
 }
 
-// TODO(D-026): Implement this function perhaps as part of milestone 2.
-// void *arena_reset(struct Arena *arena)
-// {
-//         return nullptr;
-// }
+// TODO(D-026): Implement this function - expected past milestone 2.
+void *arena_reset(struct Arena *arena);
 
 // Frees the arena, its contained chained blocks and their respective
 // buffers in reverse order.
