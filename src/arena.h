@@ -10,8 +10,11 @@
 struct Arena;
 
 // Create and initialize the arena. Caller owns the arena and is responsible
-// for releasing it using `arena_destroy`. `capacity` is the capacity of the
-// first block in the chain that the arena owns
+// for releasing it using `arena_destroy`. The created arena consists of a block
+// with an implementation defined initial capacity.
+// - Will abort() if (somehow) this initial capacity is greater than the maximum
+//   allowed capacity.
+// - Will exit() if memory for the block could not be allcoated by the system.
 struct Arena *arena_create(void);
 
 // Allocates memory on the arena and returns a pointer to the allocated store
