@@ -15,9 +15,12 @@
 constexpr size_t KB = 1024;
 constexpr size_t MB = KB * 1024;
 constexpr size_t BLOCK_INIT_CAP = 64 * KB;
-constexpr size_t BLOCK_MAX_CAP = 5 * MB;
 constexpr size_t GROWTH_FACTOR = 2;
 constexpr size_t BLOCK_MAX_ALIGNMENT = 64;
+
+// BLOCK_MAX_CAP oly bounds the maximum memory that can be requested, it does
+// not mean the maximum space that can be requested
+constexpr size_t BLOCK_MAX_CAP = 5 * MB;
 
 // A simple list node for a block of data
 struct Block_ {
@@ -94,6 +97,8 @@ static void *allocate(struct Arena *arena, size_t size, size_t align)
 {
         static_assert(BLOCK_MAX_ALIGNMENT < BLOCK_MAX_CAP,
                       "Block max capactiy is too big an alignment...");
+
+        FATAL(size == 0, FATAL_PATH_ABORT, "Requested size must be greater than 0");
 
         FATAL(!check_alignment(align), FATAL_PATH_ABORT, "Alignment must be a power of 2. Got %zu",
               align);

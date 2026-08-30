@@ -15,12 +15,14 @@ struct Arena;
 // - Will exit() if memory for the block could not be allcoated by the system.
 struct Arena *arena_create(void);
 
-// Allocates memory on the arena and returns a pointer to the allocated store
+// Allocates memory on the arena and returns a pointer to the allocated store.
+// `arena` should be non-null and `size` should be greater than 0
 // NOTE: This may cause the arena to grow
 void *arena_alloc(struct Arena *arena, size_t size);
 
 // Destroys the arena and returns nullptr. This should only be called if the
 // arena was created using `arena_create()`
+// `arena` must be non-null
 nullptr_t arena_destroy(struct Arena *arena);
 
 #ifdef FUNC_TEST_SUITE
