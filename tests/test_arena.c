@@ -146,6 +146,27 @@ static struct TestCounter test_arena(void)
               "Expected %zu | Got %zu",
               old_cap, arena_cap, arena_growth_factor, (arena_cap / old_cap));
 
+        // -----------------------------------------------------
+        // [TEST 5] - Max Fit
+        // Request allocation of maximum possible capacity.
+        // ------------------------------------------------------
+
+        printf("\n[TEST 5] - Max Fit\n---------------------------------------------\n");
+
+        p = arena_alloc(arena, block_max_cap);
+        arena_cap = arena_get_capacity(arena);
+
+        CHECK((arena_cap == block_max_cap), counter,
+              "Arena capacity should be the same as allowed maximum block capacity Expected %zu | "
+              "Got %zu",
+              block_max_cap, arena_cap);
+
+        // -----------------------------------------------------
+        // [TEST 6] - Arena Destroy
+        // ------------------------------------------------------
+
+        printf("\n[TEST 6] - Arena Destroy\n---------------------------------------------\n");
+
         arena = arena_destroy(arena);
         p = nullptr;
 
