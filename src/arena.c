@@ -43,6 +43,9 @@ static void *allocate(struct Arena *arena, size_t size, size_t align);
 
 struct Arena *arena_create(void)
 {
+        static_assert(
+                BLOCK_INIT_CAP < BLOCK_MAX_CAP,
+                "Capacity request higher than BLOCK_MAX_CAP will cause the program to `abort`");
         return create_arena(BLOCK_INIT_CAP);
 }
 
@@ -50,10 +53,6 @@ struct Arena *arena_create(void)
 // This should be called only once per arena needed.
 static struct Arena *create_arena(size_t cap)
 {
-        FATAL(cap > BLOCK_MAX_CAP, FATAL_PATH_ABORT,
-              "Requested capacity (%zu) greater than max allowed capacity (%zu)", cap,
-              BLOCK_MAX_CAP);
-
         struct Arena *arena = malloc(sizeof(struct Arena));
         FATAL(arena == nullptr, FATAL_PATH_EXIT, "Unable to allocate memory");
 
