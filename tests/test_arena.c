@@ -111,9 +111,9 @@ static struct TestCounter test_arena(void)
         // -----------------------------------------------------
         // [TEST 3] - Tight fit
         // Requested allocation is for the exact available space
-        // NOTE: Cursor must be aligned for this test
         // ------------------------------------------------------
 
+        // NOTE: Cursor must be aligned for this test
         assert(((uintptr_t)cursor % alignof(max_align_t) == 0));
 
         printf("\n[TEST 3] - Tight Fit\n---------------------------------------------\n");
@@ -130,9 +130,9 @@ static struct TestCounter test_arena(void)
         // -----------------------------------------------------
         // [TEST 4] - Chain Arena Block
         // Request allocation to chain a new block.
-        // Dep: [TEST 3] must have completely passed for this
         // ------------------------------------------------------
 
+        // NOTE: [TEST 3] must have completely passed for this
         assert(counter.passed == counter.total && arena_available == 0);
 
         printf("\n[TEST 4] - Grow Arena\n---------------------------------------------\n");
@@ -152,12 +152,57 @@ static struct TestCounter test_arena(void)
               "Pointer returned is aligned. Pointer: %p, Align: %zu", (void *)p,
               alignof(max_align_t));
 
+        const unsigned char *arena_buf = arena_get_buffer(arena);
+        cursor = arena_get_cursor(arena);
+
+        CHECK((arena_buf < cursor && cursor < (arena_buf + arena_cap)), counter,
+              "Cursor is within the newly allocated buffer. Buffer start: %p | Cursor: "
+              "%p | Buffer end: %p",
+              (void *)arena_buf, (void *)cursor, (void *)(arena_buf + arena_cap));
+
+        // ------------------------------------------------------------------
+        // [TEST 5] - Padding Causes Grow
+        // Request allocation for available space when cursor is unaligned.
+        // ------------------------------------------------------------------
+
+        printf("\n[TEST 5] - Padding Causes Grow\n---------------------------------------------\n");
+
+        // NOTE: Cursor must not be aligned for this test
+        assert(((uintptr_t)cursor % alignof(max_align_t) != 0));
+
+        arena_available = arena_get_available(arena);
+        old_cap = arena_get_capacity(arena);
+
+        // Request all remaining space in the buffer, since the cursor is
+        // unaligned (see assert above), it needs to move to an aligned address
+        // (the padding bytes), padding + request size will now exceed available
+        // arena space and force the grow
+        p = arena_alloc(arena, arena_available);
+        arena_cap = arena_get_capacity(arena);
+
+        CHECK(((arena_cap / old_cap) == arena_growth_factor), counter,
+              "Arena should grow by growth factor. (Previous Capacity %zu | Current Capacity %zu) "
+              "Expected %zu | Got %zu",
+              old_cap, arena_cap, arena_growth_factor, (arena_cap / old_cap));
+
+        CHECK(((uintptr_t)p % alignof(max_align_t) == 0), counter,
+              "Pointer returned is aligned. Pointer: %p, Align: %zu", (void *)p,
+              alignof(max_align_t));
+
+        arena_buf = arena_get_buffer(arena);
+        cursor = arena_get_cursor(arena);
+
+        CHECK((arena_buf < cursor && cursor < (arena_buf + arena_cap)), counter,
+              "Cursor is within the newly allocated buffer. Buffer start: %p | Cursor: "
+              "%p | Buffer end: %p",
+              (void *)arena_buf, (void *)cursor, (void *)(arena_buf + arena_cap));
+
         // -----------------------------------------------------
-        // [TEST 5] - Max Fit
+        // [TEST 6] - Max Fit
         // Request allocation of maximum possible capacity.
         // ------------------------------------------------------
 
-        printf("\n[TEST 5] - Max Fit\n---------------------------------------------\n");
+        printf("\n[TEST 6] - Max Fit\n---------------------------------------------\n");
 
         p = arena_alloc(arena, block_max_cap - (alignof(max_align_t) - 1));
         arena_cap = arena_get_capacity(arena);
@@ -168,10 +213,10 @@ static struct TestCounter test_arena(void)
               block_max_cap, arena_cap);
 
         // -----------------------------------------------------
-        // [TEST 6] - Arena Destroy
+        // [TEST 7] - Arena Destroy
         // ------------------------------------------------------
 
-        printf("\n[TEST 6] - Arena Destroy\n---------------------------------------------\n");
+        printf("\n[TEST 7] - Arena Destroy\n---------------------------------------------\n");
 
         arena = arena_destroy(arena);
         p = nullptr;
