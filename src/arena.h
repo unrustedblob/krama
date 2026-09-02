@@ -7,22 +7,34 @@
 
 struct Arena;
 
-// Create and initialize the arena. Caller owns the arena and is responsible
-// for releasing it using `arena_destroy`. The created arena consists of a block
-// with an implementation defined initial capacity.
-// - Will abort() if (somehow) this initial capacity is greater than the maximum
-//   allowed capacity.
-// - Will exit() if memory for the block could not be allcoated by the system.
+// Create and initialize the arena. The created arena consists of a block with
+// an implementation defined initial capacity.
+//
+// Lifetime:
+//   Owned, release using `arena_destroy`.
+//
+// NOTE:
+//   - Will exit() if memory for the block could not be allocated by the system.
 struct Arena *arena_create(void);
 
 // Allocates memory on the arena and returns a pointer to the allocated store.
-// `arena` should be non-null and `size` should be greater than 0
-// NOTE: This may cause the arena to grow
+//
+// Lifetime:
+//   Arena — valid until teardown, never freed individually.
+//
+// Preconditions:
+//   - `arena` should be non-null
+//   - `size` should be greater than 0
+//
+// NOTE:
+//   This may cause the arena to grow
 void *arena_alloc(struct Arena *arena, size_t size);
 
-// Destroys the arena and returns nullptr. This should only be called if the
-// arena was created using `arena_create()`
-// `arena` must be non-null
+// Destroys the arena and returns nullptr.
+//
+// Preconditions:
+//   - arena was created using `arena_create()`
+//   - `arena` must be non-null
 nullptr_t arena_destroy(struct Arena *arena);
 
 #ifdef FUNC_TEST_SUITE

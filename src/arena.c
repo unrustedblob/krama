@@ -75,7 +75,7 @@ static struct Block_ *create_block(size_t cap)
         FATAL(block == nullptr, FATAL_PATH_EXIT, "Unable to allocate memory");
 
         void *buffer = malloc(cap);
-        FATAL(buffer == nullptr, FATAL_PATH_EXIT, "Unable to allcoate memory");
+        FATAL(buffer == nullptr, FATAL_PATH_EXIT, "Unable to allocate memory");
 
         *block = (struct Block_){
                 .next = nullptr,
@@ -96,7 +96,7 @@ void *arena_alloc(struct Arena *arena, size_t size)
 static void *allocate(struct Arena *arena, size_t size, size_t align)
 {
         static_assert(BLOCK_MAX_ALIGNMENT < BLOCK_MAX_CAP,
-                      "Block max capactiy is too big an alignment...");
+                      "Maximum alignment exceeds block capacity");
 
         FATAL(size == 0, FATAL_PATH_ABORT, "Requested size must be greater than 0");
 
