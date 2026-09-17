@@ -41,6 +41,9 @@ place.
 | D-024 | Arena initial capacity is fixed, not caller-supplied | Decided | ## |
 | D-025 | `CHECK` stays a macro until the lexer tests land | Deferred | ## |
 | D-026 | `arena_reset` deferred past milestone 2 | Deferred | ## |
+| D-027 | Block header and buffer are separate allocations | Decided | ## |
+| D-028 | Pointer cursor with a `size_t` companion, not an offset | Decided | ## |
+| D-029 | Zero-size allocation requests abort | Decided | ## |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -487,6 +490,161 @@ exactly the evidence this entry is waiting for.
 **Reference.** D-003 (the arena decision this refines); STYLE.md §9.2 (allocate, never free, one
 teardown at exit). Ryan Fleury, *Untangling Lifetimes: The Arena Allocator*, for the mark/release
 form and the scratch-arena pattern it enables.
+
+---
+
+### D-027 — Block header and buffer are separate allocations
+
+**Status:** Decided · **Session:** ## · **Spec:** n/a (implementation) — refines D-003
+
+**Decided.** Each block costs two allocations: one for `struct Block_` and one for the buffer it
+describes, with the block holding a `buffer` pointer. The arena therefore performs `1 + 2N`
+allocations for `N` blocks — one for the header, two per block.
+
+**Rejected.**
+
+- *Flexible array member — one allocation per block, with the buffer trailing the header.* The
+  better design on every count that can be counted: `1 + N` allocations, no stored `buffer` pointer,
+  header and data contiguous so reading `available` and writing at the cursor touch one cache line
+  rather than two, and no partial-failure state where the header succeeded and the buffer did not.
+  Rejected for iteration 1 on legibility, not on merit. Keeping the metadata in a separate heap
+  object means an overrun of the arena's allocatable memory corrupts a buffer rather than the block
+  structure describing it, which is worth something while the allocator is being written for the
+  first time. The FAM form also needs `alignas(max_align_t)` on the trailing array — otherwise the
+  data begins at `sizeof(struct Block_)` from a `malloc`'d address, which is 8-aligned but not
+  16-aligned — and that subtlety is one more thing to hold at once.
+- *A single allocation sized `sizeof(header) + cap` with the buffer pointer computed by hand.* The
+  FAM without the language feature. Rejected outright: it has the FAM's alignment subtlety plus
+  manual pointer arithmetic the compiler would otherwise do, and C23 has the feature.
+
+**Why.** The extra allocation is per *block*, not per node — with a block sized for a few thousand
+nodes, a realistic milestone 1 program performs three `malloc`s in total. The cost is invisible
+against the work of transpiling, and the choice is reversible for free: block layout is private to
+`arena.c`, so `arena_create` / `arena_alloc` / `arena_destroy` are untouched by a later change and
+no call site knows. That asymmetry is the whole argument — a wrong answer here costs one function,
+where a wrong answer on the handle-versus-singleton question would have cost every caller.
+
+**Consequences.**
+
+- `1 + 2N` allocations and frees. `arena_destroy` frees the buffer and then the block, per link.
+- 8 bytes per block for the stored `buffer` pointer. Per block, so negligible.
+- The partial-failure state the two-allocation form creates costs nothing, because the
+  allocate-or-die policy exits rather than unwinding — there is no cleanup path to write. The error
+  decision paid for the layout decision.
+- Block base alignment comes from `malloc`, which guarantees `alignof(max_align_t)`. The FAM form
+  would have had to establish that itself.
+
+**Revisit when.** The milestone 2 arena revision, where this is expected to change together with
+D-028 — the FAM and the offset cursor are natural partners, since a buffer at a known offset from
+the header makes `size_t` bookkeeping the obvious representation.
+
+**Reference.** D-003 (the arena decision this refines); C23's flexible array member rules.
+
+---
+
+### D-028 — Pointer cursor with a `size_t` companion, not an offset
+
+**Status:** Decided · **Session:** ## · **Spec:** n/a (implementation) — refines D-003
+
+**Decided.** The arena tracks its position as an `unsigned char *cursor` into the current block,
+paired with a `size_t available`. Every decision — fit tests, padding — is arithmetic on
+`available`; the pointer only ever moves by an amount already validated. `move_cursor` is the sole
+mutator of both.
+
+**Rejected.**
+
+- *A pure `size_t` offset from the block's base, with no cursor pointer.* Safer by construction:
+  every value is bounded by `cap`, so overflow is unreachable rather than merely avoided; no
+  `uintptr_t` cast is needed anywhere; and no pointer exists until the final line, which removes the
+  possibility of forming a pointer past one-past-the-end — itself undefined behaviour in C, whether
+  or not it is dereferenced. Rejected because the pointer form is the one that could be reasoned
+  about confidently at this point in the project. A representation whose maintainer can picture it
+  is worth more in iteration 1 than one that is safer on paper and opaque in the head.
+- *Pointer plus an `end` pointer, computing `end - cursor` at each test.* One fewer field and no
+  duplicated state. Rejected because the subtraction is the fit test anyway, and naming the
+  remaining span makes the division of labour explicit: the pointer answers *where*, the `size_t`
+  answers *how much*.
+- *All three — `cursor`, `end` and `available`.* The original sketch. Rejected because `end` and
+  `available` are derived from each other, and duplicated state that must agree is what drifts.
+
+**Why.** The hybrid keeps the offset form's arithmetic safety while keeping the pointer's mental
+model. Every comparison is unsigned and subtractive — `size > available - padding`, never
+`used + size > cap` — so nothing can wrap. The single cast to `uintptr_t` in `compute_padding` is a
+*read* of the address to obtain a number, not arithmetic producing a pointer, so the
+pointer-to-integer-to-pointer round trip that STYLE.md §9.2 warns about never happens.
+
+**Consequences.**
+
+- Fit tests must be written subtractively, and in an order where the first test licenses the second:
+  `padding > available || size > available - padding`. The short-circuit is load-bearing, not
+  stylistic — reversing the operands lets the subtraction underflow before the guard runs.
+- `cursor` and `available` are two views of one fact and nothing enforces their agreement. That is
+  the cost of the hybrid, and the reason `move_cursor` is the only function permitted to change
+  either.
+- Padding is computed, never rounded up (STYLE.md §9.2). `compute_padding` is a pure query taking
+  `const struct Arena *`; the separation of the computation from the move is what makes the
+  alignment invariant provable rather than argued, after an earlier version that both computed and
+  moved produced two defects in a row.
+- `compute_padding` depends on `align` being a power of two, which is checked on entry to
+  `allocate`, and on `align <= BLOCK_MAX_ALIGNMENT`, which bounds `align - 1` for every downstream
+  subtraction.
+
+**Revisit when.** The milestone 2 arena revision, alongside D-027. With a flexible array member the
+buffer sits at a fixed offset from the block header, at which point the offset representation is
+both safer and no less legible — which is the condition that decided this entry.
+
+**Reference.** STYLE.md §9.2 (compute the padding, do not round the address up); CERT C INT30-C on
+unsigned wraparound.
+
+---
+
+### D-029 — Zero-size allocation requests abort
+
+**Status:** Decided · **Session:** ## · **Spec:** n/a (implementation)
+
+**Decided.** `arena_alloc(arena, 0)` is a transpiler bug. It reports through `FATAL_PATH_ABORT`
+rather than returning. The precondition — `size` must be greater than zero — is documented in
+`arena.h`, so it is part of the API contract rather than an implementation quirk.
+
+**Rejected.**
+
+- *Permissive: return the current cursor.* What the code did before this entry, and genuinely
+  defensible — the pointer returned is valid, aligned and non-null, which avoids `malloc(0)`'s real
+  problem of possibly returning `NULL` and being misread as failure. Rejected because two zero-size
+  requests return the *same* address. Two callers each believe they own a distinct object and
+  silently share storage, with no crash and nothing for AddressSanitizer to see, since arena memory
+  is never freed (STYLE.md §9.2). The failure mode is not the call itself but the next one.
+- *Return `nullptr` for a zero-size request*, mirroring what `malloc` is permitted to do. Rejected
+  because `arena_alloc`'s contract is that it never returns null and callers therefore do not check
+  (STYLE.md §9.6). Adding a single null-returning case reintroduces a check at every call site, to
+  serve a condition that is a bug in the caller anyway.
+- *Treat it as a diagnostic rather than an assertion.* Rejected on STYLE.md §11's split: a
+  diagnostic means the *input program* is wrong. No funC source can cause a zero-size arena request;
+  only a defect in the transpiler can.
+
+**Why.** Nothing in milestone 1 has a legitimate reason to request zero bytes. Every way the
+request can arise is a symptom of something else — a node count that came out zero, a length that
+underflowed, a `count * sizeof(...)` where `count` was empty. Aborting turns all of those into a
+stack trace at the point of the mistake instead of a shared pointer discovered three phases later.
+Strictness is also cheap here in a way it would not be in a library: every caller is internal and
+known.
+
+**Consequences.**
+
+- `arena.h` carries the precondition; a caller does not have to read `arena.c` to learn it.
+- The abort path is currently unverified. The in-process unit suite cannot test a path that ends the
+  process, and a process-per-case driver does not exist yet — recorded in `PROJECT.md`'s
+  *Deliberately incomplete* table rather than left implicit.
+- This is the first `FATAL_PATH_ABORT` reachable from a caller's arguments rather than from an
+  internal invariant, which makes the missing death-test harness concrete rather than theoretical.
+
+**Revisit if.** A caller appears with a legitimate zero-size request — a node type with a genuinely
+empty child array, where allocating zero elements is meaningful rather than mistaken. At that point
+permissive-and-unique becomes the better contract, and the aliasing problem has to be solved rather
+than avoided.
+
+**Reference.** STYLE.md §11 (assertions versus diagnostics); §9.6 (allocation failure is not
+propagated).
 
 ---
 

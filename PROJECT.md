@@ -9,14 +9,15 @@
 
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
-**Working on:** Arena (iteration 1) testing complete and fatal error module in place
+**Working on:** Arena iteration 1 reviewed and closed; fatal-error module in place
 
 **Blocked on:** -
 
-**Last green:** Tests clean under all flags; arena iteration 1 compiles and links
+**Last green:** 39/39 unit tests passing, clean under the §12 flags and under
+`-fsanitize=address,undefined`
 
-**Next up:** Get it reviewed. Initialize in main. Then decision records for the arena's implementation
-choices, then AST node definitions.
+**Next up:** Initialize the arena in `main`. Then AST node definitions — which also settle the block
+size. Then the diagnostic sink (STYLE.md §13 defers it to "before the lexer"), then the lexer.
 
 **Deliberately incomplete** —
 
@@ -26,6 +27,8 @@ choices, then AST node definitions.
 | `arena.c` — mark/release | Absent | Nothing in milestone 1 reclaims early; the AST lives to teardown. Additive when multi-file arrives |
 | `arena.c` — alignment | Fixed at `alignof(max_align_t)` | Per-type alignment is a later refinement, STYLE.md §9.2 |
 | `arena.c` — ASan poisoning | Absent | `ASAN_POISON_MEMORY_REGION` on block creation, unpoison per allocation. Planned follow-up, STYLE.md §9.2 |
+| `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; same conversation as STYLE.md §13's testing conventions. First concrete case is D-029 |
+| `tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 
 ---
 
@@ -174,7 +177,7 @@ poisoning of arena memory are all absent by decision, not by oversight.
 
 | Review Pass | Issue # | Bug | Resolution |
 |---|---|--- | ---|
-| 1 | [#6](https://github.com/unrustedblob/funC/issues/6) | Program aborts when passing allocation request with exact fit | The contraint was updated to handle the equal scenario as well |
+| 1 | [#6](https://github.com/unrustedblob/funC/issues/6) | Program aborts when passing allocationr equest with exact fit | The contraint was updated to handle teh equal scenario as well |
 
 
 **Friction.**
@@ -195,7 +198,7 @@ poisoning of arena memory are all absent by decision, not by oversight.
 
 ---
 
-##1 2026-08-30 — Arena iteration 1, Unit Testing Complete
+### 2026-08-30 — Arena iteration 1, Unit Testing Complete
 
 **Did.**
 
@@ -227,19 +230,36 @@ poisoning of arena memory are all absent by decision, not by oversight.
 3. AST node definitions.
 
 ---
-### 2026-09-02 — Arena implementation and unit testing complete
+
+### 2026-09-17 — Arena iteration 1 reviewed and closed
 
 **Did.**
 
-1. Arena API tested, fatal-error module ready
+1. Full review pass over `arena.c`, `arena.h`, `fatal.c`, `fatal.h` and `tests/test_arena.c` against
+   STYLE.md and the spec. Everything raised is either fixed or recorded below.
+2. `allocate` restructured around command-query separation — `compute_padding` returns a number,
+   `move_cursor` is the only mutator, one growth decision per allocation.
+3. Zero-size requests now abort, with the precondition documented in `arena.h` (D-029).
+4. Header doc comments carry STYLE.md §9.5's lifetime vocabulary.
+5. Decision records for the arena's implementation shape: D-027 (separate block and buffer
+   allocations), D-028 (pointer cursor with a `size_t` companion), D-029 (zero-size aborts).
+6. Test suite extended to 39 checks — padding-forced growth, and an allocation immediately after
+   growth checked for alignment and placement rather than only for capacity change.
 
 **Worked.**
 
-1. Command-query separation in `allocate`. `compute_padding` returns a number and `move_cursor` is the only mutator, so alignment became a property of the call sequence rather than something each branch had to remember. This came from re-reading the code rather than from the review — the review only named it afterwards.
-2. Design questions were answered before code was written, in dependency order: ownership, then what the AST asks of the allocator, then the API. Each answer constrained the next instead of being revisited.
-3. Sanitizers found what the tests could not. Every block was leaking and all 34 tests passed; ASan reported it immediately. §9.2's warning that ASan cannot see arena bugs is true and separate — it sees block bookkeeping fine.**Didn't.**
-4. Allocate-or-die paid for the block layout. Two allocations per block create a partial-failure state, but since OOM exits there was no unwind path to write.
-5. Reading before implementing on alignment. The study list and hand-worked wrap case came first; the formula was understood rather than copied.
+1. Command-query separation in `allocate` came from re-reading the code, not from the review — the
+   review only supplied the name afterwards. Splitting the computation from the move is what made
+   the alignment invariant provable instead of argued.
+2. Design questions were answered before code, in dependency order: ownership, then what the AST
+   asks of the allocator, then the API. Each answer constrained the next rather than being revisited.
+3. Sanitizers found what the tests could not. Every block was leaking while all 34 tests passed;
+   ASan reported it on the first run. STYLE.md §9.2's warning is about *arena* bugs specifically —
+   block bookkeeping is still visible to it.
+4. The allocate-or-die decision paid for the block layout. Two allocations per block create a
+   partial-failure state, but since OOM exits there is no unwind path to write (D-027).
+5. Reading before implementing on alignment. The study list and the hand-worked wrap case came
+   first, so the formula was understood rather than copied.
 
 **Didn't.**
 
@@ -255,19 +275,36 @@ poisoning of arena memory are all absent by decision, not by oversight.
 
 **Friction.**
 
-1. The growth condition took three attempts. First version used `&&`, which made one conjunct permanently true and, in the case it appeared to guard, skipped growth and aborted instead. Second version split it into two `if`s, which fixed the gap but could grow twice for one allocation and left the dead conjunct in place. Third version — one subtractive test with `||` — was correct and shorter than both. The lesson is that the first two both looked like they handled the padding case; only tracing the false branch showed otherwise.
-2. Padding accounting circled for several exchanges. Whether to fold `align - 1` into the request or subtract it from the ceiling — both work, doing both double-counts. Partly self-inflicted, partly because the review introduced `MAX_ALIGNMENT` mid-discussion without restating where the other checks then belonged. Worth pinning the frame before iterating next time.
-3. The sanitizer build failed to link. `-fsanitize=address` was on the compile line but not the link line; ASan's runtime is pulled in by the driver at link time. Cost an unexplained wall of undefined `__asan_*` references.
+1. **The growth condition took three attempts.** The first used `&&`, which made one conjunct
+   permanently true and, in the case it appeared to guard, skipped growth and aborted instead. The
+   second split it into two `if`s — which closed the gap but could grow twice for one allocation and
+   left the dead conjunct in place. The third, one subtractive test with `||`, was correct and
+   shorter than both. Both wrong versions *looked* like they handled the padding case; only tracing
+   the false branch showed otherwise.
+2. **Padding accounting circled for several exchanges.** Whether to fold `align - 1` into the
+   request or subtract it from the ceiling — both work, doing both double-counts. Resolved by fixing
+   which function owns which check before touching the arithmetic again.
+3. **The sanitizer build failed to link.** `-fsanitize=address` was on the compile line but not the
+   link line; ASan's runtime is pulled in by the driver at link time, so the result was a wall of
+   undefined `__asan_*` references. STYLE.md §12 wants `address,undefined` as a separate target, not
+   in `CFLAGS`.
 
-**Stubbed.** See the *Deliberately incomplete* table. Mark/release, per-type alignment, and ASan
-poisoning of arena memory are all absent by decision, not by oversight.
+**Stubbed.** See the *Deliberately incomplete* table. Two new rows this session: abort paths are
+untested pending a process-per-case driver, and test 2's capacity assertion is weaker than it looks
+and is deliberately left until the milestone 2 arena revision.
 
 **Next.**
 
-1. Get it reviewed.
-2. Decision records for the arena's implementation choices — no capacity parameter, separate block
-   and data allocations over a flexible array member, pointer cursor with a `size_t` companion.
-3. AST node definitions.
+1. Initialize the arena in `main`.
+2. AST node definitions — Appendix A is the checklist. This also settles the block size, which is
+   currently a round number rather than a derived one.
+3. The diagnostic sink. STYLE.md §13 defers it to "before the lexer" and spec §2.1 has the scanner
+   emitting diagnostics, so it blocks the lexer rather than the AST.
+4. Lexer.
+
+**Note for next session.** Alignment arithmetic now appears in Friction twice (2026-08-21 and this
+entry). Per the convention below, that graduates it from candidate to scheduled: a bump allocator
+over a `static` buffer, outside funC.
 
 ---
 
