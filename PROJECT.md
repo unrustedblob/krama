@@ -29,6 +29,7 @@ size. Then the diagnostic sink (STYLE.md §13 defers it to "before the lexer"), 
 | `arena.c` — ASan poisoning | Absent | `ASAN_POISON_MEMORY_REGION` on block creation, unpoison per allocation. Planned follow-up, STYLE.md §9.2 |
 | `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; same conversation as STYLE.md §13's testing conventions. First concrete case is D-029 |
 | `tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
+| `tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 
 ---
 
