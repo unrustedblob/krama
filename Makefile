@@ -48,7 +48,7 @@ $(BUILD_DIR)/%.o: $(TEST_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(GCCFLAGS) -c $< -o $@
 
-.PHONY: all clean
+.PHONY: all clean test clean_test
 clean:
 	rm -rf $(BUILD_DIR)
 
