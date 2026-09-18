@@ -328,3 +328,115 @@ refactor(parse): extract operand loop from additive and multiplicative
 
 - **Reference:** Tim Pope, "A Note About Git Commit Messages" — the canonical short piece on
   subject/body conventions.
+
+---
+
+## Appendix — Command sequence
+
+The mechanics of the workflow above, in order. This is a reference, not a second set of rules: where
+it and *Branches* / *Merging* disagree, those sections win. `<branch>` is the stage branch
+throughout.
+
+### 1. Pre-checks, on `main`
+
+```
+git status                    # On branch main, working tree clean
+git fetch                     # downloads only; never touches files or main
+git status                    # up to date with 'origin/main'
+git rev-parse main            # note the hash
+```
+
+`git status` compares against the *local copy* of `origin/main`, so the fetch has to come first or
+"up to date" can be stale. Anything other than clean and up to date stops here.
+
+### 2. Branch
+
+```
+git switch -c <branch>
+git rev-parse main <branch>   # two identical hashes
+git merge-base main <branch>  # the same hash again
+```
+
+Both checks confirm the branch was cut from the current tip of `main`. A `merge-base` older than
+`main` means the branch started from a stale `main` — delete it and start again.
+
+### 3. Work — repeat per commit
+
+```
+git status
+git diff                      # read before staging
+git add <paths>               # by name, never `git add .`
+git commit                    # editor; see Format above
+```
+
+Keep experiments (scratch files, `a.out`) outside the repository.
+
+### 4. Clean up
+
+```
+git status                    # must be clean
+git rebase -i --exec "make check" main
+```
+
+In the todo list: reorder, `squash` or `fixup` the noise into logical commits, and **delete any
+`exec` line that would land inside a squash group** — it would check a half-finished state.
+
+`squash` opens an editor to write the combined message; `fixup` discards the squashed commit's
+message and keeps the earlier one unchanged.
+
+If the rebase stops at a commit:
+
+```
+<fix the files>
+git add <paths>
+git commit --amend
+git rebase --continue
+```
+
+or `git rebase --abort` to put everything back as it was.
+
+### 5. Review
+
+```
+git log --oneline main..<branch>    # two dots: commits not on main
+git diff --stat main...<branch>     # three dots: net change since branching
+git diff main...<branch>
+```
+
+Three dots compares against the shared ancestor, so `main`'s own new commits are not shown as
+removals. Anything found sends you back to step 4 — review follows the rebase, because the rebase
+can change code.
+
+### 6. Merge
+
+```
+git switch main
+git status
+git pull --ff-only                  # never a rebasing pull
+git merge --no-ff <branch>          # editor: <branch>: <subject>, body, Refs:
+```
+
+`--ff-only` refuses rather than rebasing, which would flatten an unpushed merge commit. `--no-ff`
+forces the merge commit that a fast-forward would skip.
+
+### 7. Verify, push, delete
+
+```
+git log --first-parent --oneline -3 # one new line: the merge
+git log --graph --oneline -6        # the stage as a side line rejoining main
+git push
+git status                          # up to date with 'origin/main'
+git branch -d <branch>              # lowercase -d, always
+```
+
+If `-d` refuses, the branch is not merged — investigate. Reaching for `-D` discards the check.
+
+### Notes
+
+- **Recovery.** Amend and rebase write *new* commits and leave the old ones unreachable, not
+  deleted. `git reflog` lists where `HEAD` has been; the old hash is usable until garbage collection.
+  `git branch -d` prints the deleted tip's hash for the same reason.
+- **On scripting this.** Steps 1, 2 and 7 automate cleanly — they are checks with predictable output.
+  Steps 3 to 6 do not: choosing what goes in each commit, editing the todo list, reading the diff and
+  writing the messages are the parts that carry the value. A `wip-start` / `wip-finish` pair around
+  the manual middle is the natural split, and the same place the deferred hooks fit.
