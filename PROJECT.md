@@ -9,16 +9,17 @@
 
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
-**Working on:** Git branch workflow and the `make check` gate (`m1/workflow`); arena iteration 1
-reviewed and closed, fatal-error module in place
+**Working on:** Nothing in flight. The branch workflow (`m1/workflow`) and the rename to Krama
+(`m1/rename`) are merged; arena iteration 1 reviewed and closed, fatal-error module in place
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`
 
-**Next up:** Initialize the arena in `main`. Then AST node definitions — which also settle the block
-size. Then the diagnostic sink (STYLE.md §13 defers it to "before the lexer"), then the lexer.
+**Next up:** Initialize the arena in `main` — first stage under the new workflow, so the first real
+branch. Then AST node definitions — which also settle the block size. Then the diagnostic sink
+(STYLE.md §13 defers it to "before the lexer"), then the lexer.
 
 **Deliberately incomplete** —
 
@@ -34,6 +35,7 @@ size. Then the diagnostic sink (STYLE.md §13 defers it to "before the lexer"), 
 | `Makefile` — `check` coverage | Runs the test build only; `src/main.c` is filtered out of it, so the production binary is never compiled by the gate | A break confined to `main.c` passes `check`. Fold `all` into `check` once `main.c` does more than exist |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
 | Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
+| `src/main.c` — source path | Hardcoded absolute path to a fixture, `/home/unrust/projects/krama/tests/krama_src/test.krm` | Breaks if the working copy moves — it already did once, during D-032. Goes when `main` takes a path argument, due with the arena initialization |
 | `tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 
 ---
@@ -381,6 +383,93 @@ over a `static` buffer, outside Krama.
 
 **Note for next session.** The alignment-arithmetic exercise from the previous entry is still
 scheduled and untouched: a bump allocator over a `static` buffer, outside Krama.
+
+---
+
+### 2026-09-19 — Renamed to Krama, workflow's second run
+
+**Did.**
+
+1. Renamed the project from funC to **Krama** (D-032): `.krm` sources, `.krm` / `.expected` test
+   pairs, `kramac` binary, `KRAMA_` macros and guards, `krama_` emitted runtime, `Krama` in prose and
+   `krama` in code.
+2. Ran the workflow end to end for the second time on `m1/rename`, this time with three logical
+   commits: the COMMITS.md command-sequence appendix, the documentation rename, then identifiers and
+   fixtures.
+3. Added the command-sequence appendix to COMMITS.md — the seven steps as runnable commands with the
+   reasoning for each check inline.
+4. Consolidated the fixture corpus: `tests/fc-src/` and `tests/funC_src/` with `.fc` and `.func`
+   became `tests/krama_src/` with `.krm` throughout. Renamed the working copy to match.
+5. Settled the scope of what gets renamed: live documents and every *pointer to a file* change;
+   decided entries and note prose keep saying funC, because they record a project that carried that
+   name at the time.
+
+**Worked.**
+
+1. Checking every candidate name against reality rather than taste. `mouse`, `koa`, `tav`, `naja`
+   and `bug` each looked fine and each was taken — `tav` by an existing C-inspired language, which
+   is the same category as this project. Three searches per candidate (the name as a language, the
+   extension, the repository) cost minutes and removed five names.
+2. Surveying with `git grep -i` before changing anything. 341 matching lines, of which 159 were the
+   English word "function" — the real work was about 180 lines, and 11 identifiers. Knowing the
+   split before starting is what made a blind `sed` avoidable.
+3. Splitting the branch by logical change rather than by file. COMMITS.md carried two unrelated
+   changes — a title rename and a new appendix — and `git add -p` staged them into separate commits
+   from one file.
+4. The gate caught nothing this time, which is the correct outcome for a mechanical change, and
+   `make check` still proved the `KRAMA_TEST_SUITE` rename reached every header: a define renamed in
+   the Makefile but missed in `arena.h` would have failed the test build outright.
+
+**Didn't.**
+
+1. **`sutra`** — the closest miss, naming the genre of terse rule-texts expanded by a teacher, which
+   is what the spec and the planned book already are. Dropped for the Kama Sutra association.
+2. **`kerf`** — the runner-up, and the better *story*: a kerf has width, and cutting as though it
+   does not is the beginner's error that this language's position on overflow refuses to make.
+   Dropped because `krama` describes both the artifact and the method of building it.
+3. **`anu`** and the rest of that family — all girls' names, which ruled out the shortest and
+   cleanest Sanskrit options.
+4. **Rewriting history** so the project appears always to have been Krama, as chibicc did. Rule 4
+   forbids it, and the rename is itself part of the record.
+5. **A book chapter.** Agreed the K&R-style walkthrough is worth writing, and that chapters are
+   written when a milestone *closes*, not as the language moves. Its examples should be actual
+   corpus files, so `make check` proves the book still compiles.
+
+**Friction.**
+
+1. **`git grep` searches contents, never filenames.** Every sweep this session was blind to
+   `funC2.func`, which survived the extension rename with its basename intact. The check for names
+   is `git ls-files | grep -i func`, and it reads the *index*, so it only tells the truth after
+   staging.
+2. **Case-sensitivity is a tool, not a detail.** `funC` cannot match `FUNC_TEST_SUITE`; `FUNC_`
+   cannot match `__func__`. Surveying wants `-i`; changing things wants precise patterns. A blind
+   `sed 's/func/krama/g'` would have produced `kramation` and broken `fatal.h` outright.
+3. **`sed 's/funC/krama/g'` would also have turned `cfunC` into `ckrama`.** Ordered substitutions,
+   longest first, or exclude the file.
+4. **Lowercase spellings hid from the sweeps.** `funcrt.c` in two spec sections and `.func` in
+   several places matched neither `funC` nor `FUNC_`. Found only by searching lowercase `func`
+   separately.
+5. **An edit was undone by a file handed back for pasting.** The Status line of D-032 had a clause
+   trimmed, then the trimmed version was overwritten by a regenerated copy built from a stale read.
+   Caught in review. Worth preferring targeted edits over whole-file replacement when a file is
+   already being edited by hand.
+
+**Stubbed.** One new row in *Deliberately incomplete*: `src/main.c`'s hardcoded absolute fixture
+path, which broke once already when the working copy was renamed.
+
+**Next.**
+
+1. Initialize the arena in `main`, on `m1/arena-init` — or folded into `m1/ast-nodes`, since block
+   size depends on node size. Decide before naming the branch; the name is permanent once merged.
+2. Fold `all` into `check` so the gate compiles `src/main.c`. The gap is harmless only while
+   `main.c` does nothing, which stops being true with the arena in it.
+3. AST node definitions — Appendix A is the checklist.
+4. Rename the GitHub repository, then `git remote set-url`.
+
+**Note for next session.** The alignment-arithmetic exercise is still scheduled and untouched: a
+bump allocator over a `static` buffer, outside Krama. Session numbering is also owed — the
+`DECISIONS.md` template's `Session: ##` has never been filled in, and tying it to the note number is
+the cheapest fix, since both increment together.
 
 ---
 
