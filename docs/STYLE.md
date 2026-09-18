@@ -1,11 +1,11 @@
-# funC — C Coding Standards
+# Krama — C Coding Standards
 
 **Version:** 1.4 · **Date:** 2026-08-15
 **Status:** Final for milestone 1. Amend by addition when a rule is actually needed.
 **Target standard:** C23 (`-std=c23`, pinned)
 
 Rules only. Rationale for individual decisions lives in `DECISIONS.md`; language rules live in
-`funC-spec-v1.md`.
+`krama-spec-v1.md`.
 
 Sections marked **TBD** are not yet decided — do not invent a convention for them, raise it instead.
 
@@ -53,7 +53,7 @@ The "clockwise/spiral rule" is wrong for some declarations. Use right-to-left, o
 | `static` functions | `snake_case`, **no** prefix | `new_binary`, `peek` |
 | Variables, fields, parameters | `snake_case` | `node_count`, `src_len` |
 | Enum members | `SCREAMING_SNAKE`, prefixed | `TOK_IDENT`, `ND_BINARY` |
-| Macros | `SCREAMING_SNAKE` | `FUNC_LEXER_H` |
+| Macros | `SCREAMING_SNAKE` | `KRAMA_LEXER_H` |
 | File-scope constants | `SCREAMING_SNAKE` | `MAX_NESTING` |
 
 ### 2.1 Rules
@@ -86,14 +86,14 @@ The "clockwise/spiral rule" is wrong for some declarations. Use right-to-left, o
 
 ### 2.2 Case in prefixes
 
-`snake_case` concerns the separator, not the flattening of proper nouns. A language or product name
-keeps its own capitalization; everything around it is lowercase and underscore-separated.
+**`Krama` in prose. `krama` in code.** Identifiers, prefixes, paths and the file extension are
+lowercase; running text uses the capitalized form.
 
 Transpiler source uses lowercase module prefixes: `ast_`, `arena_`, `lex_`, `parse_`. An uppercase
 leading token in C conventionally signals a macro, and that signal is already spent (see the table
 above).
 
-Emitted runtime code is a separate codebase with its own convention: `funC_trap`, `funC_div_i32`.
+Emitted runtime code is a separate codebase with its own convention: `krama_trap`, `krama_div_i32`.
 
 ### 2.3 No `typedef` on structs or enums
 
@@ -177,7 +177,7 @@ PROJECT.md         current state and work log
 CLAUDE.md          assisstant interaction riles - see D-023
 Makefile
 src/               all sources and headers, flat
-tests/             .func / .expected pairs and the driver
+tests/             .krm / .expected pairs and the driver
 spec/              language and transpiler specification
 docs/              session notes, DECISIONS.md, STYLE.md, COMMITS.md
 tools/             scripts supporting the docs and build — stdlib only
@@ -191,7 +191,7 @@ of how it got that way. When the spec loses context, the notes supply it.
 to bootstrap on a fresh clone. Same reasoning as the zero-dependency test suite.
 
 Flat `src/` with headers beside their sources. The `include/` versus `src/` split exists for
-libraries that install public headers; funC is a binary with no public API, so there is nothing to
+libraries that install public headers; kramac is a binary with no public API, so there is nothing to
 separate. One `-Isrc` covers it.
 
 Objects build out of tree into `build/`, so `src/` stays free of artefacts and `make clean` is
@@ -209,13 +209,13 @@ something from it — not for symmetry. `main.c` has no header.
 Traditional guards, not `#pragma once`.
 
 ```c
-#ifndef FUNC_LEXER_H
-#define FUNC_LEXER_H
+#ifndef KRAMA_LEXER_H
+#define KRAMA_LEXER_H
 /* ... */
-#endif // FUNC_LEXER_H
+#endif // KRAMA_LEXER_H
 ```
 
-Name is `FUNC_<MODULE>_H`. No leading underscore. Comment the `#endif` with the macro name.
+Name is `KRAMA_<MODULE>_H`. No leading underscore. Comment the `#endif` with the macro name.
 
 ### 3.4 Headers are self-contained
 
@@ -266,7 +266,7 @@ rule.
 A type gets its own header when it has real API surface, or when it is small but touched everywhere.
 Otherwise it goes in `common.h`.
 
-Do not create a file named `types.h` — the type checker's representation of funC types will need
+Do not create a file named `types.h` — the type checker's representation of Krama types will need
 `type.h`, and the two would be permanently confusable.
 
 ---
@@ -302,14 +302,14 @@ Use the type that says what the value **is**.
 | Use | For |
 |---|---|
 | `size_t` | Sizes, counts, indices, results of `sizeof` and `strlen` |
-| `int32_t`, `uint8_t`, … | funC *values*, where width is part of the semantics |
+| `int32_t`, `uint8_t`, … | Krama *values*, where width is part of the semantics |
 | `ptrdiff_t` | Pointer differences |
 | `bool` | Predicates and flags — `<stdbool.h>` |
 | `int` | `main`'s return, and C library returns passed straight through. Little else |
 | bare `unsigned`, `short`, `long` | Never. Name the width |
 | `char` | Only for C string data (`const char *`). Never for arithmetic |
 
-**A fixed-width type in transpiler code signals "this is a funC value."** Preserve that signal —
+**A fixed-width type in transpiler code signals "this is a Krama value."** Preserve that signal —
 internal counts and indices use `size_t`, not `int32_t`.
 
 ### 5.2 Unsigned arithmetic
@@ -326,7 +326,7 @@ for (size_t i = n - 1; i >= 0; i--)    /* WRONG — never terminates */
 
 ### 5.3 `bool`
 
-Used freely in transpiler code. Unrelated to funC not having a `bool` type — that is the language
+Used freely in transpiler code. Unrelated to Krama not having a `bool` type — that is the language
 being implemented, this is the language implementing it.
 
 `bool`, `true`, `false` are keywords in C23. Do not include `<stdbool.h>`.
@@ -789,7 +789,7 @@ Raise these rather than inventing a convention on the spot.
 |---|---|
 | Error handling mechanics — propagation, return conventions, diagnostic sink shape | Before the lexer. Spec §2.1 has the scanner emitting diagnostics. |
 | The assertion mechanism — `assert` compiles away under `NDEBUG`, which would remove internal invariant checks from release builds | Same conversation as the above; they are two halves of "how does this program report that something is wrong". |
-| Testing conventions — corpus layout, `.func` / `.expected` naming, driver contract | Once the lexer produces output worth testing. |
+| Testing conventions — corpus layout, `.krm` / `.expected` naming, driver contract | Once the lexer produces output worth testing. |
 | Build tooling — target chains, format gates, hooks, doc scripts | Phase 2. |
 
 Anything else that arises is an addition to this document, not a gap in it.
@@ -811,7 +811,7 @@ Quick pass before requesting review.
 - [ ] Every short form in an identifier appears in the §2.4 table
 - [ ] Same-kind values in one scope are named contrastively
 - [ ] No identifier names appear in user-facing text
-- [ ] `size_t` for counts and indices; fixed-width types only for funC values
+- [ ] `size_t` for counts and indices; fixed-width types only for Krama values
 - [ ] All struct initializers are designated
 - [ ] Nothing initialized solely to silence an uninitialized warning
 - [ ] By-value struct types carry a `static_assert` on size

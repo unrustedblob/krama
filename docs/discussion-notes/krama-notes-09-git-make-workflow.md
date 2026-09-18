@@ -1,4 +1,4 @@
-# funC — Git branch workflow and Makefile targets
+# Krama — Git branch workflow and Makefile targets
 
 **Date:** 2026-09-17 / 2026-09-18
 **Status:** Discussion record. **Not normative.** Decided as `D-030` and `D-031`; COMMITS.md

@@ -1,7 +1,7 @@
-# funC — Roadmap, milestone 2 onward
+# Krama — Roadmap, milestone 2 onward
 
 **Date:** 2026-08-24
-**Status:** Consolidated discussion record. **Not normative.** Input to `funC-spec-v2.md`.
+**Status:** Consolidated discussion record. **Not normative.** Input to `krama-spec-v2.md`.
 **Supersedes as a reading order:** the milestone-2 design note (2026-08-20), the generics and
 constraints note, and the references/`const` thread. Those stay as the record of how each
 conclusion was reached; this is where they are reconciled.

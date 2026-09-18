@@ -177,7 +177,7 @@ static void move_cursor(struct Arena *arena, size_t size)
         arena->available -= size;
 }
 
-#ifdef FUNC_TEST_SUITE
+#ifdef KRAMA_TEST_SUITE
 
 const unsigned char *arena_get_cursor(const struct Arena *const arena)
 {
@@ -213,4 +213,4 @@ size_t arena_get_growth_factor(void)
 {
         return GROWTH_FACTOR;
 }
-#endif // FUNC_TEST_SUITE
+#endif // KRAMA_TEST_SUITE

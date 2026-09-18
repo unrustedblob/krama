@@ -11,11 +11,11 @@ fn main(): i32 {
         };
 
         if (z > 3) {
-                @print("funC +++\n");
+                @print("Krama +++\n");
         } else if (z > 1) {
-                @print("funC +\n");
+                @print("Krama +\n");
         } else {
-                @print("No funC\n");
+                @print("No Krama\n");
         }
         return 0;
 }

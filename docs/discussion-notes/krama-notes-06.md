@@ -1,4 +1,4 @@
-# funC Transpiler — Design Notes, Session 06
+# Krama Transpiler — Design Notes, Session 06
 
 **Date:** 2026-08-12
 **Status:** Pre-implementation. Specification closed for milestone 1. No code written.
@@ -174,7 +174,7 @@ off nodes. Both codegen and the interpreter should be plain switch-driven walks 
 
 ## 6. Status
 
-Specification for milestone 1 is **closed**. See `funC-spec-v1.md`.
+Specification for milestone 1 is **closed**. See `krama-spec-v1.md`.
 
 Remaining open items are non-blocking and recorded in the specification, §13.
 
