@@ -762,7 +762,7 @@ messages, optional colon).
 
 ### D-032 — The language is named Krama; `.krm`, `kramac`
 
-**Status:** Decided · **Session:** ## · **Spec:** title and throughout 
+**Status:** Decided · **Session:** ## · **Spec:** title and throughout
 
 **Decided.** The project is renamed from funC to **Krama** (Sanskrit क्रम — sequence, order, one
 step following another). Source files take **`.krm`**; the binary is **`kramac`**. In prose the name
@@ -773,9 +773,10 @@ takes `krama_` (`krama_trap`, `krama_div_i32`), and the deferred linked-runtime 
 The GitHub repository is renamed to match.
 
 **Supersedes.** The `.func` / `.exec` pairing named in **D-025** and **D-030**; both now read
-`.krm` / `.expected`. STYLE.md §2.2 is rewritten: its premise — that a language name keeps its own
-capitalization inside `snake_case` — existed to explain the capital C in `funC` and has no work left
-to do.
+`.krm` / `.expected`. The `FUNC_TEST_SUITE` define named in **D-024** and **D-026**, and the
+`FUNC_<MODULE>_H` guard form, which now read `KRAMA_TEST_SUITE` and `KRAMA_<MODULE>_H`. STYLE.md
+§2.2 is rewritten: its premise — that a language name keeps its own capitalization inside
+`snake_case` — existed to explain the capital C in `funC` and has no work left to do.
 
 **Rejected.**
 

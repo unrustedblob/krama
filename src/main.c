@@ -1,4 +1,4 @@
-// Read funC source file and dump to stdout
+// Read Krama source file and dump to stdout
 
 #include <errno.h>
 #include <stdio.h>
@@ -7,7 +7,7 @@
 
 int main(void)
 {
-        FILE *fp = fopen("/home/unrust/projects/func/tests/fc-src/test.fc", "rb");
+        FILE *fp = fopen("/home/unrust/projects/krama/tests/krama_src/test.krm", "rb");
         int exit_status = 1;
 
         if (!fp) {

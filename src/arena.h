@@ -1,7 +1,7 @@
 // API for the Arena implementation
 
-#ifndef FUNC_ARENA_H
-#define FUNC_ARENA_H
+#ifndef KRAMA_ARENA_H
+#define KRAMA_ARENA_H
 
 #include <stddef.h>
 
@@ -37,7 +37,7 @@ void *arena_alloc(struct Arena *arena, size_t size);
 //   - `arena` must be non-null
 nullptr_t arena_destroy(struct Arena *arena);
 
-#ifdef FUNC_TEST_SUITE
+#ifdef KRAMA_TEST_SUITE
 
 const unsigned char *arena_get_cursor(const struct Arena *arena);
 const unsigned char *arena_get_buffer(const struct Arena *arena);
@@ -47,5 +47,5 @@ size_t arena_get_max_cap(void);
 size_t arena_get_init_cap(void);
 size_t arena_get_growth_factor(void);
 
-#endif // FUNC_TEST_SUITE
-#endif // FUNC_ARENA_H
+#endif // KRAMA_TEST_SUITE
+#endif // KRAMA_ARENA_H

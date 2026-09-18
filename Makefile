@@ -13,7 +13,7 @@ SRC_DIR = src
 TEST_DIR = tests
 BUILD_DIR = build
 
-TARGET = $(BUILD_DIR)/cfunC
+TARGET = $(BUILD_DIR)/kramac
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
@@ -30,7 +30,7 @@ ifneq ($(filter test check,$(MAKECMDGOALS)),)
 	TEST_OBJS = $(patsubst $(TEST_DIR)/%.c, $(BUILD_DIR)/%.o, $(TEST_SRCS))
 	OBJS := $(OBJS) $(TEST_OBJS)
 	GCCFLAGS := $(GCCFLAGS) $(SANFLAGS)
-	CFLAGS := $(CFLAGS) -DFUNC_TEST_SUITE
+	CFLAGS := $(CFLAGS) -DKRAMA_TEST_SUITE
 endif
 
 all: $(TARGET)

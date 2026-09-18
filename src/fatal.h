@@ -1,7 +1,7 @@
 // Fatal path handling for program vs system errors
 
-#ifndef FUNC_FATAL_H
-#define FUNC_FATAL_H
+#ifndef KRAMA_FATAL_H
+#define KRAMA_FATAL_H
 
 #include <stdio.h>
 
@@ -28,4 +28,4 @@ enum FatalPath {
                 }                                                                      \
         } while (false)
 
-#endif // FUNC_FATAL_H
+#endif // KRAMA_FATAL_H

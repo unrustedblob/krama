@@ -1,5 +1,5 @@
 ---
-# funC — clang-format configuration
+# Krama — clang-format configuration
 #
 # Requires clang-format 18+ (InsertBraces requires 15+).
 # Pin the version in the Makefile: output changes between major releases, and an
