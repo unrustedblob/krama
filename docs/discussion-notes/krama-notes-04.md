@@ -1,4 +1,4 @@
-# funC Transpiler — Design Notes, Session 04
+# Krama Transpiler — Design Notes, Session 04
 
 **Date:** 2026-08-12
 **Status:** Pre-implementation. No code written.

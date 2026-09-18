@@ -1,7 +1,7 @@
-# funC — Milestone 2 Design Discussion
+# Krama — Milestone 2 Design Discussion
 
 **Date:** 2026-08-20
-**Status:** Discussion record. Not normative. Input to `funC-spec-v2.md`.
+**Status:** Discussion record. Not normative. Input to `krama-spec-v2.md`.
 **Context:** Written during a break from Arena implementation. No code produced; language surface only.
 
 > This document records what was settled, what was rejected and why, and what remains open.

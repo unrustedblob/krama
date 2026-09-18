@@ -1,6 +1,6 @@
-# funC — Decisions Index
+# Krama — Decisions Index
 
-Rationale record. The **specification** (`funC-spec-v1.md`) says what funC *is*; this document says
+Rationale record. The **specification** (`krama-spec-v1.md`) says what Krama *is*; this document says
 why, what was rejected, and when to reopen.
 
 **Precedence:** where this document and the spec disagree, **the spec wins**. If a decision changes,
@@ -46,6 +46,7 @@ place.
 | D-029 | Zero-size allocation requests abort | Decided | ## |
 | D-030 | Short-lived local branches, merged with `--no-ff` | Decided | ## |
 | D-031 | Commit scope is optional; issue numbers go in trailers only | Decided | ## |
+| D-032 | The language is named Krama; `.krm`, `kramac` | Decided | ## |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -713,7 +714,7 @@ and pull requests worth their cost, and reopens whether feature branches may be 
 pushing.
 
 **Reference.** chibicc's history (rui314/chibicc: linear `main`, original history on
-`historical/old`); `git log --first-parent`; `git rebase --exec`; `funC-notes-09-git-make-workflow`.
+`historical/old`); `git log --first-parent`; `git rebase --exec`; `krama-notes-09-git-make-workflow`.
 
 ---
 
@@ -756,6 +757,91 @@ proves ambiguous often enough that a mandatory scope would have prevented real c
 
 **Reference.** GitHub Docs, "Linking a pull request to an issue" (closing keywords in commit
 messages, optional colon).
+
+---
+
+### D-032 — The language is named Krama; `.krm`, `kramac`
+
+**Status:** Decided · **Session:** ## · **Spec:** title and throughout 
+
+**Decided.** The project is renamed from funC to **Krama** (Sanskrit क्रम — sequence, order, one
+step following another). Source files take **`.krm`**; the binary is **`kramac`**. In prose the name
+is capitalized, **Krama**; in code, paths, prefixes and the extension it is lowercase, **krama**.
+Macros and include guards take `KRAMA_` (`KRAMA_ARENA_H`, `KRAMA_TEST_SUITE`); the emitted runtime
+takes `krama_` (`krama_trap`, `krama_div_i32`), and the deferred linked-runtime option is
+`krama_rt.c`. Test fixtures consolidate under `tests/krama_src/` as **`.krm` / `.expected`** pairs.
+The GitHub repository is renamed to match.
+
+**Supersedes.** The `.func` / `.exec` pairing named in **D-025** and **D-030**; both now read
+`.krm` / `.expected`. STYLE.md §2.2 is rewritten: its premise — that a language name keeps its own
+capitalization inside `snake_case` — existed to explain the capital C in `funC` and has no work left
+to do.
+
+**Rejected.**
+
+- *Keeping funC.* It was a weak play on "fun C", it depends on the capital C to read correctly, and
+  `func_` reads as an abbreviation of *function* in a C codebase, which is exactly the wrong signal
+  in a transpiler whose source is full of functions.
+- *`mouse` / `.mse`.* Personal and affectionate. Rejected: Peter Grogono's Mouse (1979, BYTE, with a
+  1983 book and a retro following) owns the search results permanently.
+- *`bug`.* A pun on debugging. Rejected: `.bug` is OpenBUGS's extension for saved execution images.
+- *`koa`, `tav`, `naja`.* Rejected on collisions — Koa.js is a major Node framework;
+  `jkingstonc/tav` is an existing C/Go/Jai-inspired language, the same category as this one; `naja`
+  is an AJAX library for Nette. `naja` also carried no connection to the project beyond sounding
+  well.
+- *`anu`.* Sanskrit अणु, "atom" — the smallest unit that still works, which fits a deliberately
+  minimal language. Rejected for a domestic reason: it is also a girl's name, as are `rita`,
+  `nitya`, `lipi`, `vidhi` and `sadhana`, which removed most of the same family.
+- *`sutra`.* The closest miss. It names the genre of maximally terse rule-texts meant to be expanded
+  by a teacher, which is what the spec and the planned K&R-style book already are. Rejected for the
+  Kama Sutra association, which would have to be fielded indefinitely.
+- *`kerf`, the runner-up.* The slot a saw blade leaves. It carries the strongest story — a kerf has
+  width, and cutting as though it does not is the classic beginner's error, which is precisely this
+  language's position on signed overflow and `INT32_MIN / -1`. Rejected only because `krama`
+  describes both the artifact and the method of building it, and is the more personal choice.
+- *`.str` as the extension, punning on Sutra.* Rejected on the same grounds funC was: in a C
+  codebase `str` means string to every reader, and a fixture sitting beside string-handling code
+  would misread every time. Also taken by game string tables and PlayStation video files.
+- *`.su`.* Taken: GCC writes `.su` files under `-fstack-usage` — the exact tooling this project
+  lives in.
+- *`KRM_` as the code prefix.* Shorter, and it matches the extension. Rejected: two spellings of one
+  name means every reader has to learn which is which. The three-letter form earns its keep only
+  where length is the point, which is the extension alone.
+- *Rewriting history so the project appears to have always been Krama.* This is what chibicc did,
+  keeping its original history on `historical/old`. Rejected under COMMITS.md Rule 4 — the history
+  is pushed — and because the rename is itself part of the record.
+
+**Why.** *Krama* is what a compiler is — lex, parse, check, emit, in order — and what building one
+by hand has been. It is short, types easily, has no religious or comic baggage, and its search
+results are effectively unclaimed. `kramac` follows `gcc`, `rustc` and `javac`, where the trailing
+`c` denotes *compiler*, not the C language; transpiling to C does not change what the program is.
+
+**Consequences.**
+
+- Live documents carry the new name: the spec, STYLE.md, COMMITS.md, PROJECT.md's Current section,
+  README.md, CLAUDE.md, and the note *titles*.
+- **Decided entries and note prose keep saying funC.** They record a project that carried that name
+  at the time, and editing them would claim the name existed earlier than it did — the same
+  reasoning as "never edit a decided entry in place". **Pointers are the exception**: a reference to
+  a *file* (`funC-spec-v1.md`, `funC-notes-09-…`) was updated wherever it appeared, frozen entries
+  included, because a stale pointer is a dead link rather than a historical fact.
+- Sixteen GitHub issue URLs in PROJECT.md were updated. GitHub redirects a renamed repository, but
+  the redirect is dropped if a repository with the old name is ever created under the same account.
+- `src/main.c` holds an absolute path containing the old directory name. It breaks if the working
+  copy is moved, and is due to be replaced when the arena is initialized there.
+- **CLAUDE.md is gitignored.** It carries the name and was updated by hand; nothing in the
+  repository verifies it, and a fresh clone does not receive it.
+- The `/note-it` convention and the note-numbering instruction live outside the repository and were
+  updated separately.
+- Two fixture directories (`tests/fc-src/`, `tests/funC_src/`) and two extensions (`.fc`, `.func`)
+  existed before this entry; both collapse into one directory and one extension.
+
+**Revisit if.** A collision emerges that search did not surface — another language named Krama, or
+`.krm` claimed by tooling in this space. Renaming again costs roughly what this cost, and that cost
+grows with every document.
+
+**Reference.** Grogono's Mouse (BYTE, July 1979); Koa.js; `jkingstonc/tav`; OpenBUGS `.bug`; GCC
+`-fstack-usage`; `krama-notes-09-git-make-workflow`.
 
 ---
 

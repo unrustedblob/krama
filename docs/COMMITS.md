@@ -1,4 +1,4 @@
-# funC — Commit Conventions
+# Krama — Commit Conventions
 
 Covers commit messages, branches and merging. The reasoning behind the branch and merge workflow is
 `D-030`; the reasoning behind optional scopes and issue trailers is `D-031`.

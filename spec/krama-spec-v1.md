@@ -1,4 +1,4 @@
-# funC — Language and Transpiler Specification, v1 (Milestone 1)
+# Krama — Language and Transpiler Specification, v1 (Milestone 1)
 
 **Status:** Closed for milestone 1. Implementation may begin against this document.
 **Date:** 2026-08-12
@@ -11,7 +11,7 @@
 
 ## 1. Overview
 
-funC is a small, explicitly-typed imperative language that transpiles to C. Milestone 1 covers a
+Krama is a small, explicitly-typed imperative language that transpiles to C. Milestone 1 covers a
 single `main` function, three scalar types, arithmetic expressions, and printing.
 
 ### 1.1 Design principles
@@ -26,14 +26,14 @@ These are the load-bearing commitments. Everything in this document follows from
    context.
 4. **Semantics before representation.** A type's meaning constrains its operations. `c8` denotes a
    character, so arithmetic on it is meaningless and therefore illegal.
-5. **Defined behavior over host behavior.** Where C leaves something undefined, funC either forbids
-   it statically or checks it at runtime. funC has no undefined behavior.
+5. **Defined behavior over host behavior.** Where C leaves something undefined, Krama either forbids
+   it statically or checks it at runtime. Krama has no undefined behavior.
 6. **Statements are not expressions.** Assignment produces no value. Whole classes of bug are
    unrepresentable rather than diagnosed.
 
 ### 1.2 Reference example
 
-funC:
+Krama:
 
 ```
 fn main(): i32 {
@@ -66,7 +66,7 @@ int main(void) {
 
 ## 2. Types
 
-| funC | Emitted C | Definition |
+| Krama | Emitted C | Definition |
 |---|---|---|
 | `i32` | `int32_t` | 32-bit two's complement signed integer |
 | `f32` | `float` | IEEE-754 binary32 |
@@ -79,7 +79,7 @@ int main(void) {
   included.
 - `c8` is unsigned by definition — a negative character is meaningless. This closes C's
   implementation-defined `char` signedness entirely; bare `char` is never emitted.
-- funC's `c8` is ASCII only. A byte above 127 in a character literal is a **lexical error**, not a
+- Krama's `c8` is ASCII only. A byte above 127 in a character literal is a **lexical error**, not a
   silent truncation.
 - `f32` inherits IEEE-754 semantics, including ±inf and NaN from float division by zero.
 
@@ -126,9 +126,9 @@ Both are discarded by the scanner and do not reach the parser.
 ### 3.3 Scanning rules
 
 - **Maximal munch.** `//` must be attempted before `/`, or `5 // 2` scans as two divisions.
-- **`#` for comments, not `//`.** funC uses `//` as an operator, so it cannot also open a comment.
+- **`#` for comments, not `//`.** Krama uses `//` as an operator, so it cannot also open a comment.
   This is Python's resolution of the same collision.
-- **No `--` token.** `++` and `--` do not exist in funC. `- -x` scans as two `MINUS` tokens (and is
+- **No `--` token.** `++` and `--` do not exist in Krama. `- -x` scans as two `MINUS` tokens (and is
   then rejected by the parser, §4.4).
 - **`FLOAT_LIT` requires digits on both sides of the point.** `1.` and `.5` are rejected. This keeps
   `1.` from colliding with a future member-access `.` and upholds principle 3.
@@ -197,12 +197,12 @@ additive = additive ( "+" | "-" ) multiplicative | multiplicative ;
 
 Recursive descent **cannot execute this** — the function would recurse without consuming a token.
 The iterative form above generates the same language and is what the parser implements. The
-iterative form is normative for funC; the associativity it fails to encode is supplied by §5.
+iterative form is normative for Krama; the associativity it fails to encode is supplied by §5.
 
 ### 4.2 `program = { function }`
 
 The grammar admits multiple functions. Milestone 1 restricts this **in the type checker**, not the
-grammar (§12). Rationale: the grammar describes funC rather than funC-milestone-1 and so remains
+grammar (§12). Rationale: the grammar describes Krama rather than Krama-milestone-1 and so remains
 stable; the restriction produces a real diagnostic instead of "expected EOF"; and a checker layer is
 required regardless, since the grammar cannot express "must be named `main`."
 
@@ -278,7 +278,7 @@ Any operand pair not listed is a **type error**. There is no promotion, no coerc
 
 - **`/` on integers.** `5 / 2` is a type error. `/` is true division and has no integer signature.
   Integer division is `//`. *(Consequence: `let x: i32 = 5 / 2;` is rejected — `/` yields `f32`.)*
-- **`//` and `%` on floats.** Integer-only. C's `%` has no float form; funC does not add one.
+- **`//` and `%` on floats.** Integer-only. C's `%` has no float form; Krama does not add one.
 - **All arithmetic on `c8`.** Principle 4. `'a' + 'b'` is a type error. This also removes C's
   `char + char → int` promotion problem by making the expression unwritable.
 - **Every mixed-type operand pair.** `i32 + f32`, `i32 / f32`, `c8 == i32`, all rejected.
@@ -319,10 +319,10 @@ The remainder is **always non-negative**, regardless of the sign of either opera
 |---|---|---|---|---|
 | Truncated (C) | `-3` | `1` | `-3` | `-1` |
 | Floored (Python) | `-4` | `-1` | `-4` | `1` |
-| **Euclidean (funC)** | **`-3`** | **`1`** | **`-4`** | **`1`** |
+| **Euclidean (Krama)** | **`-3`** | **`1`** | **`-4`** | **`1`** |
 
 All three satisfy the first identity; they differ in whether the sign lands on quotient or
-remainder. funC chooses Euclidean because a non-negative remainder is the mathematically standard
+remainder. Krama chooses Euclidean because a non-negative remainder is the mathematically standard
 definition and makes `i % n` safe as an index without a guard.
 
 ### 7.3 Implementation
@@ -345,7 +345,7 @@ stronger guarantee for `//` and `%` than differential testing.
 
 ### 8.1 Trapping is a software check
 
-"Trap" in funC means **software-checked abort**, not a hardware trap. The check is a branch in the
+"Trap" in Krama means **software-checked abort**, not a hardware trap. The check is a branch in the
 emitted C, executed *before* the operation, so the faulting instruction is never reached.
 
 No signals. No handlers. No architecture-specific code. No undefined behavior. Portable C.
@@ -370,7 +370,7 @@ one defined, portable, testable outcome.
 | `a == INT32_MIN && b == -1` | integer division helper (overflow) |
 | NaN, infinite, or out-of-range value in `f32 → i32` | cast helper — phase 2 |
 
-Float division by zero is **not** trapped. IEEE-754 defines it as ±inf/NaN and funC inherits that.
+Float division by zero is **not** trapped. IEEE-754 defines it as ±inf/NaN and Krama inherits that.
 
 ### 8.4 Failure mechanism
 
@@ -381,11 +381,11 @@ tooling aim directly. Exit code 134 remains testable.
 
 ### 8.5 Runtime prelude
 
-The helpers (`funC_trap`, `funC_div_i32`, `funC_mod_i32`, later `funC_f32_to_i32`) constitute a
+The helpers (`krama_trap`, `krama_div_i32`, `krama_mod_i32`, later `krama_f32_to_i32`) constitute a
 runtime component.
 
 **Placement is deferred** (§13). Options are an inline `static inline` prelude in every generated
-`.c` (self-contained; `cc out.c` works with no flags) or a separate linked `funcrt.c` (worthwhile
+`.c` (self-contained; `cc out.c` works with no flags) or a separate linked `krama_rt.c` (worthwhile
 only with multiple translation units). No impact on the AST.
 
 ---
@@ -395,7 +395,7 @@ only with multiple translation units). No impact on the AST.
 ### 9.1 Form
 
 `@print` is a **builtin**, not a function. It performs type-directed code generation and cannot be
-declared in the language, since funC has neither variadics nor generics.
+declared in the language, since Krama has neither variadics nor generics.
 
 `@` denotes the intrinsic namespace generally. Planned members: `@cast`, `@is`, `@type`, `@comp`,
 `@derive`, `@sizeof`.
@@ -410,7 +410,7 @@ declared in the language, since funC has neither variadics nor generics.
 
 ### 9.3 Format table
 
-| funC type | Emitted C type | Format |
+| Krama type | Emitted C type | Format |
 |---|---|---|
 | `i32` | `int32_t` | `%d` — see §13 |
 | `f32` | `float` | `%g` |
@@ -457,7 +457,7 @@ the spec against, and the interpreter needs a tree.
 **Cascading recursive descent** — one function per precedence level, mapping one-to-one onto §5.
 
 Chosen over precedence climbing because the EBNF-to-code correspondence is literal and directly
-checkable by eye, which serves the verification aim. The extra functions are acceptable given funC's
+checkable by eye, which serves the verification aim. The extra functions are acceptable given Krama's
 deliberately small operator set.
 
 **Planned migration:** refactor to Pratt when comparison, equality, and logical operators push the
@@ -482,8 +482,8 @@ from a refactor that was happening anyway.
 
 ### 10.5 Codegen
 
-- **Emit `#line` directives** mapping generated C back to funC source, so gdb on the compiled binary
-  displays funC. Emission must begin *after* the runtime prelude, which has no funC source position.
+- **Emit `#line` directives** mapping generated C back to Krama source, so gdb on the compiled binary
+  displays Krama. Emission must begin *after* the runtime prelude, which has no Krama source position.
 - **Do not pretty-print.** Emit ugly C and pipe through `clang-format`.
 - **`main` is special-cased.** C requires `int main(void)`, not `int32_t main(void)`. Identical on
   every real platform, but the standard names `int`.
@@ -499,7 +499,7 @@ from a refactor that was happening anyway.
   expected. Golden C-text comparison breaks on whitespace and formatting choices that carry no
   semantic weight.
 - **A small number of golden tests for codegen shape only.**
-- **Zero dependencies.** A `tests/` directory of `.func` + `.expected` pairs and a shell driver.
+- **Zero dependencies.** A `tests/` directory of `.krm` + `.expected` pairs and a shell driver.
 - **`-fsanitize=address,undefined` as a Makefile target, from the start.**
 - **Trap tests check exit code and stderr**, both observable.
 
@@ -540,14 +540,14 @@ Include deliberately: negative `b`, negative `a`, both negative, `a == INT32_MIN
 By §7.4 these two properties fully characterize correctness — a stronger guarantee than differential
 testing for these operators.
 
-**Round-trip:** generate random valid ASTs → pretty-print funC → re-parse → assert structural
+**Round-trip:** generate random valid ASTs → pretty-print Krama → re-parse → assert structural
 equality. Cheaply catches parser/printer disagreement.
 
 ### 11.4 Formal verification — scope
 
 CompCert-style mechanized proof is out of scope. The achievable substitute, in priority order:
 
-1. **Small-step operational semantics for funC, written on paper.** At this size, roughly one page.
+1. **Small-step operational semantics for Krama, written on paper.** At this size, roughly one page.
    This is what makes the spec real rather than prose, and it is the prerequisite artifact for any
    later mechanized proof — so nothing is wasted.
 2. **The differential interpreter** (§11.2) as the executable form of those semantics.
@@ -556,7 +556,7 @@ CompCert-style mechanized proof is out of scope. The achievable substitute, in p
 ### 11.5 Performance measurement — deferred
 
 `perf` on a 10-line input measures process startup, not the lexer. It becomes meaningful once a
-stress generator emits ~100k-line funC files. **Writing the generator is the enabling task**, not
+stress generator emits ~100k-line Krama files. **Writing the generator is the enabling task**, not
 dropping the aim. Until then the measurements that matter are coverage and correctness.
 
 ---
@@ -589,7 +589,7 @@ None block AST construction.
 | # | Item | Notes |
 |---|---|---|
 | 1 | `%d` vs `PRId32` for `i32` | `%d` works on every realistic platform. `PRId32` from `<inttypes.h>` is strictly correct for `int32_t`. Format synthesis is table-driven, so the pedantic version costs one column. Leaning `PRId32`. |
-| 2 | Runtime prelude placement | Inline `static inline` prelude vs. linked `funcrt.c`. Deferred; no AST impact. |
+| 2 | Runtime prelude placement | Inline `static inline` prelude vs. linked `krama_rt.c`. Deferred; no AST impact. |
 | 3 | C99 vs C11 target | Deferred until a genuine fork appears. Expected forks: `_Bool`/`<stdbool.h>`, anonymous structs/unions, `_Static_assert`. `_Generic` is *not* a fork (§9.4). |
 | 4 | `f32` print precision | `%g` chosen. `%.9g` would be round-trippable for binary32; revisit if the differential harness shows precision loss. |
 
@@ -624,7 +624,7 @@ resolved type. Consider whether this is a field on the node or a side table — 
 parser's output immutable and makes the phase separation visible, at the cost of a lookup.
 
 **Note on parenthesization:** `( expr )` produces no node. The tree structure records the grouping.
-If a funC pretty-printer is later built for round-trip testing (§11.3), it must re-derive
+If a Krama pretty-printer is later built for round-trip testing (§11.3), it must re-derive
 parentheses from precedence rather than recover them from the tree.
 
 ---
