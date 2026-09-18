@@ -7,7 +7,7 @@ CFLAGS = -std=c23 -g -MMD -MP -Werror -Wall -Wextra -Wpedantic \
 GCCFLAGS = -Wmaybe-uninitialized -Wfree-nonheap-object -Wformat-signedness \
 # LLVMFLAGS = -Wsometimes-uninitialized
 
-SANFLAGS = -fsanitize=address,undefined
+SANFLAGS = -fsanitize=address,undefined -fno-sanitize-recover=undefined
 
 SRC_DIR = src
 TEST_DIR = tests
@@ -16,14 +16,17 @@ BUILD_DIR = build
 TARGET = $(BUILD_DIR)/cfunC
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
+TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
+
+FMT_DIRS := $(SRC_DIR) $(TEST_DIR)
+FMT_FILES := $(shell find $(FMT_DIRS) -type f \( -name "*.c" -o -name "*.h" \))
 
 OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
-ifneq ($(filter test,$(MAKECMDGOALS)),)
+ifneq ($(filter test check,$(MAKECMDGOALS)),)
 	BUILD_DIR := $(TEST_DIR)/$(BUILD_DIR)
 	TEST_TARGET := $(BUILD_DIR)/test
 	SRCS := $(filter-out $(SRC_DIR)/main.c,$(SRCS))
-	TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
 	TEST_OBJS = $(patsubst $(TEST_DIR)/%.c, $(BUILD_DIR)/%.o, $(TEST_SRCS))
 	OBJS := $(OBJS) $(TEST_OBJS)
 	GCCFLAGS := $(GCCFLAGS) $(SANFLAGS)
@@ -48,12 +51,21 @@ $(BUILD_DIR)/%.o: $(TEST_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(GCCFLAGS) -c $< -o $@
 
-.PHONY: all clean test clean_test
+.PHONY: all clean test clean_test fmt fmt_check check
 clean:
 	rm -rf $(BUILD_DIR)
 
 clean_test:
 	rm -rf $(TEST_DIR)/$(BUILD_DIR)
+
+fmt:
+	clang-format -i $(FMT_FILES)
+
+fmt_check:
+	@clang-format --dry-run --Werror $(FMT_FILES)
+
+check: test fmt_check
+	$(TEST_TARGET)
 
 # test:
 # 	@echo "Test dir: $(TEST_DIR)"
