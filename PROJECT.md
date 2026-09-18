@@ -9,12 +9,13 @@
 
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
-**Working on:** Arena iteration 1 reviewed and closed; fatal-error module in place
+**Working on:** Git branch workflow and the `make check` gate (`m1/workflow`); arena iteration 1
+reviewed and closed, fatal-error module in place
 
 **Blocked on:** -
 
-**Last green:** 39/39 unit tests passing, clean under the §12 flags and under
-`-fsanitize=address,undefined`
+**Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
+`-fsanitize=address,undefined -fno-sanitize-recover=undefined`
 
 **Next up:** Initialize the arena in `main`. Then AST node definitions — which also settle the block
 size. Then the diagnostic sink (STYLE.md §13 defers it to "before the lexer"), then the lexer.
@@ -29,6 +30,10 @@ size. Then the diagnostic sink (STYLE.md §13 defers it to "before the lexer"), 
 | `arena.c` — ASan poisoning | Absent | `ASAN_POISON_MEMORY_REGION` on block creation, unpoison per allocation. Planned follow-up, STYLE.md §9.2 |
 | `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; same conversation as STYLE.md §13's testing conventions. First concrete case is D-029 |
 | `tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
+| `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.func`/`.exec` pairs land and `test` gains a runner |
+| `Makefile` — `check` coverage | Runs the test build only; `src/main.c` is filtered out of it, so the production binary is never compiled by the gate | A break confined to `main.c` passes `check`. Fold `all` into `check` once `main.c` does more than exist |
+| `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
+| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
 | `tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 
 ---
@@ -306,6 +311,76 @@ and is deliberately left until the milestone 2 arena revision.
 **Note for next session.** Alignment arithmetic now appears in Friction twice (2026-08-21 and this
 entry). Per the convention below, that graduates it from candidate to scheduled: a bump allocator
 over a `static` buffer, outside funC.
+
+---
+
+### 2026-09-18 — Git workflow settled, merge gate in the Makefile
+
+**Did.**
+
+1. Branch and merge workflow decided and recorded: short-lived, local-only `m<N>/<stage>` branches
+   from an up-to-date `main`, rewritten with `git rebase -i --exec "make check"`, reviewed, then
+   merged with `--no-ff` carrying a dense stage summary (D-030).
+2. Commit subject rules amended: type mandatory, scope optional and drawn from a closed vocabulary,
+   issue numbers moved out of the subject into `Refs:` / `Closes:` trailers (D-031).
+3. COMMITS.md rewritten around both — new *Branches* and *Merging* sections, the merge gate as an
+   ordered list, updates to Rules 1, 3 and 4, and hook-regex notes.
+4. Makefile: `fmt`, `fmt_check` and `check` added, `.PHONY` completed,
+   `-fno-sanitize-recover=undefined` added to `SANFLAGS`.
+5. First run of the workflow on itself — `m1/workflow` is the branch that introduces the workflow.
+
+**Worked.**
+
+1. Checking the reference instead of trusting it. The per-stage-squash idea was attributed to
+   chibicc; the repository turned out to be 316 linear commits with no merges at all, and a
+   `historical/old` branch holding the original history. That killed one option and reframed two
+   others.
+2. Deciding the merge style *before* writing the Makefile targets. `check` exists because D-030
+   needs a per-commit gate; the target's shape fell out of the decision rather than the reverse.
+3. The exit-status experiment. Two builds of an `INT_MAX + argc` program showed UBSan reporting the
+   overflow and still exiting `0`. A flag added on reasoning alone would have been believed; this
+   one was watched failing first.
+4. Reading the Makefile with the new target in mind surfaced the `MAKECMDGOALS` trap before it
+   could bite (see Friction).
+
+**Didn't.**
+
+1. **Pushed branches and pull requests** — rejected for a solo project. A pushed branch makes Rule 4
+   ambiguous, and the whole workflow depends on rewriting the branch freely before merging.
+2. **Check results in the commit message.** A hand-written "39/39 passed" is a claim, not evidence.
+   Left to `pre-push` and CI; a `Checks:` trailer is the shape if it is ever wanted.
+3. **Retroactive history rewriting** to make past work fit the new workflow. Rule 4 forbids it and
+   the history is pushed; the workflow starts from this branch.
+
+**Friction.**
+
+1. **`MAKECMDGOALS` holds what was typed, not what gets built.** The test-mode block was guarded by
+   `$(filter test,$(MAKECMDGOALS))`, so `make check` — which *builds* `test` as a prerequisite —
+   would have left sanitizers, `-DFUNC_TEST_SUITE` and the test sources switched off, with an empty
+   `TEST_TARGET`. Fixed with `$(filter test check,...)`. The gate would have been silently
+   configured wrong rather than failing loudly.
+2. **UBSan does not fail by default.** `-fsanitize=undefined` reports and continues, so a run with
+   undefined behaviour still exits `0` and every layer above it — Make, then
+   `git rebase --exec` — sees success. Only `-fno-sanitize-recover=undefined` closes it.
+3. **"Whose exit status is this?"** twice in one session: `make test` exiting `0` after a
+   compile-only run, and `echo $?` after `gcc` reporting the compiler rather than the program that
+   was never run. Both looked like passes.
+4. **The first commit message needed an amend** — subject was a noun list rather than imperative,
+   and the `Refs:` trailer was missing. The conventions are written down; applying them is not yet
+   automatic.
+
+**Stubbed.** Four new rows in *Deliberately incomplete*: `make test` still builds without running,
+`check` never compiles `src/main.c`, test output has no quiet mode, and all three hooks are absent.
+
+**Next.**
+
+1. Merge `m1/workflow` into `main` with `--no-ff`, then delete the branch.
+2. Initialize the arena in `main` — first stage under the new workflow, so first real branch.
+3. AST node definitions — Appendix A is the checklist; also settles the block size.
+4. The diagnostic sink, then the lexer.
+
+**Note for next session.** The alignment-arithmetic exercise from the previous entry is still
+scheduled and untouched: a bump allocator over a `static` buffer, outside funC.
 
 ---
 

@@ -44,6 +44,8 @@ place.
 | D-027 | Block header and buffer are separate allocations | Decided | ## |
 | D-028 | Pointer cursor with a `size_t` companion, not an offset | Decided | ## |
 | D-029 | Zero-size allocation requests abort | Decided | ## |
+| D-030 | Short-lived local branches, merged with `--no-ff` | Decided | ## |
+| D-031 | Commit scope is optional; issue numbers go in trailers only | Decided | ## |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -645,6 +647,115 @@ than avoided.
 
 **Reference.** STYLE.md §11 (assertions versus diagnostics); §9.6 (allocation failure is not
 propagated).
+
+---
+
+### D-030 — Short-lived local branches, merged with `--no-ff`
+
+**Status:** Decided · **Session:** ## · **Spec:** n/a (process) — detailed in COMMITS.md
+
+**Decided.** Each stage of a milestone is developed on its own short-lived, local-only branch named
+`m<N>/<stage>`, created from an up-to-date `main`. Before merging, the branch is rewritten with
+`git rebase -i --exec "make check" main` into a few logical commits, each of which builds and
+passes. It is then reviewed and merged with `git merge --no-ff`. The merge commit carries a dense
+summary of the whole stage under the subject `<branch-name>: <subject>`. The branch is deleted after
+merging. Existing history on `main` from before this entry is left as it is.
+
+**Rejected.**
+
+- *A long-lived `dev` or `milestone-N` branch, squash-merged into `main` at each stage.* The original
+  proposal, and it delivers the goal of `main` reading as one summarised entry per stage. Rejected
+  because a squash commit has no parent link to the commits it flattens. The merge base between the
+  two branches never advances, so every later squash re-proposes all the earlier work, and conflicts
+  grow with each stage. The workaround — hard-resetting the long-lived branch to `main` after every
+  merge — works until the day it is forgotten.
+- *Short-lived branches, squash-merged.* Avoids the merge-base problem and gives one commit per
+  stage. Rejected because it contradicts COMMITS.md Rule 3: a stage collapses into one large commit,
+  so `git bisect` can only report "somewhere in this stage." It also forces `git branch -d` to refuse
+  and `-D` to be used, which removes the check that a branch really was merged.
+- *Rebase-and-merge — a linear run of logical commits, no merge commit.* chibicc's shape (316 linear
+  commits, no merges) and the best for bisect. Rejected because the per-stage summary disappears;
+  tags would have to stand in for it. Also, chibicc reached that shape by rewriting its published
+  history wholesale, which Rule 4 forbids here.
+- *Pushing feature branches, or working through pull requests.* Gives an off-machine backup and a
+  review page. Rejected for a solo project: a pushed branch raises the question of whether it may
+  still be rewritten, and the `rebase -i` step depends on rewriting freely. Keeping branches local
+  makes Rule 4 unambiguous.
+- *Checking only the branch tip before merging.* Rejected because `rebase -i` creates intermediate
+  commits that never existed while working. A reorder can leave one commit calling something that
+  only arrives in the next: the tip passes, that commit does not build, and a later bisect stops on
+  a false failure.
+
+**Why.** Of the three merge styles, this is the only one that meets both goals at once. The merge
+commit holds the summary, so `git log --first-parent` reads as one line per stage. The logical commits
+underneath keep bisect precise and keep Rule 3 intact. Short-lived branches from a fresh `main`
+guarantee the merge base is the previous stage's merge, so earlier work is never re-proposed. After a
+`--no-ff` merge the branch tip is reachable from `main`, which is what lets `git branch -d` act as a
+genuine "was this merged?" check.
+
+**Consequences.**
+
+- The merge gate is fixed and ordered: `rebase -i --exec "make check"`, then review of
+  `git diff main...<branch>` against STYLE.md §14, then goal complete, then records updated. Review
+  follows the rebase because the rebase can change code.
+- A `make check` target is required: build, run the tests, and verify formatting without rewriting
+  any file. Until `make test` runs the `.func`/`.exec` pairs, `check` runs the unit-test binary
+  directly. A separate rewriting format target stays for manual use.
+- Merge commit subjects do not fit `<type>(<scope>)`. COMMITS.md defines their format, and the
+  deferred `commit-msg` hook needs a second pattern or it rejects every merge.
+- Git's default merge message must be replaced on every merge.
+- `main` is updated with `git pull --ff-only`. A rebasing pull would flatten an unpushed merge commit.
+- Unmerged work exists on one machine only. Stages are kept small partly to bound that risk.
+- Branch names are fixed at creation, because each name appears verbatim in `main`'s history.
+
+**Revisit if.** The project gains a second contributor, or needs CI. Either one makes pushed branches
+and pull requests worth their cost, and reopens whether feature branches may be rewritten after
+pushing.
+
+**Reference.** chibicc's history (rui314/chibicc: linear `main`, original history on
+`historical/old`); `git log --first-parent`; `git rebase --exec`; `funC-notes-09-git-make-workflow`.
+
+---
+
+### D-031 — Commit scope is optional; issue numbers go in trailers only
+
+**Status:** Decided · **Session:** ## · **Spec:** n/a (process) — detailed in COMMITS.md
+
+**Decided.** A commit subject must have a type. A scope is included when the change sits within a
+pipeline phase, and is drawn only from COMMITS.md's scope table. It is omitted when the type already
+says where. Issue numbers never appear in the subject: `Refs: #N` marks a commit as part of the work
+on an issue, and `Closes: #N` goes on the logical commit that finishes it.
+
+**Rejected.**
+
+- *Scope mandatory, as COMMITS.md previously stated.* Uniform and trivially checkable by a hook.
+  Rejected because it produces `build(build): ...` and `test(test): ...`, which repeat the type and
+  add nothing. COMMITS.md's own `build:` example already broke the rule, which is evidence the rule
+  was wrong rather than the example.
+- *Issue number as the scope — `fix(#2)`.* The style used in commits before this entry, and GitHub
+  links it to the issue. Rejected because it gives scope two meanings and drops the phase, so the
+  subject no longer says what was fixed. `git log --grep="(lex"` misses these commits.
+- *Open scope vocabulary — any meaningful word, such as `feat(token)`.* More expressive. Rejected
+  because search depends on consistent spelling; `token` and `lex` would split one phase's history
+  in two. A new word needs a new table row.
+
+**Why.** GitHub recognises issue references anywhere in the message, including trailers with a colon
+(`Closes: #10`), so moving them to the end loses nothing. Keeping the subject to type and phase keeps
+it short and searchable, and trailers already hold the decision references.
+
+**Consequences.**
+
+- COMMITS.md: the scope table loses its `build` row; the subject rules say type is mandatory and
+  scope conditional; the trailer section distinguishes `Refs: #N` from `Closes: #N`.
+- Earlier `fix(#N)` commits stay as they are (Rule 4). They remain linked on GitHub but are not
+  found by phase searches.
+- The deferred `commit-msg` hook's scope group becomes optional.
+
+**Revisit if.** Phase searches turn out not to be used in practice, or a scope-less commit type
+proves ambiguous often enough that a mandatory scope would have prevented real confusion.
+
+**Reference.** GitHub Docs, "Linking a pull request to an issue" (closing keywords in commit
+messages, optional colon).
 
 ---
 
