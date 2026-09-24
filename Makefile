@@ -10,7 +10,9 @@ GCCFLAGS = -Wmaybe-uninitialized -Wfree-nonheap-object -Wformat-signedness \
 SANFLAGS = -fsanitize=address,undefined -fno-sanitize-recover=undefined
 
 SRC_DIR = src
-TEST_DIR = tests
+TEST_ROOT = tests
+TEST_DIR = $(TEST_ROOT)/unit_tests
+TEST_BUILD_DIR = $(TEST_ROOT)/build
 BUILD_DIR = build
 
 TARGET = $(BUILD_DIR)/kramac
@@ -18,13 +20,13 @@ TARGET = $(BUILD_DIR)/kramac
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
 
-FMT_DIRS := $(SRC_DIR) $(TEST_DIR)
+FMT_DIRS := $(SRC_DIR) $(TEST_ROOT)
 FMT_FILES := $(shell find $(FMT_DIRS) -type f \( -name "*.c" -o -name "*.h" \))
 
 OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
 ifneq ($(filter test check,$(MAKECMDGOALS)),)
-	BUILD_DIR := $(TEST_DIR)/$(BUILD_DIR)
+	BUILD_DIR := $(TEST_BUILD_DIR)
 	TEST_TARGET := $(BUILD_DIR)/test
 	SRCS := $(filter-out $(SRC_DIR)/main.c,$(SRCS))
 	TEST_OBJS = $(patsubst $(TEST_DIR)/%.c, $(BUILD_DIR)/%.o, $(TEST_SRCS))
@@ -56,7 +58,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 clean_test:
-	rm -rf $(TEST_DIR)/$(BUILD_DIR)
+	rm -rf $(TEST_BUILD_DIR)
 
 fmt:
 	clang-format -i $(FMT_FILES)
