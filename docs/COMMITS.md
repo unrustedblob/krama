@@ -93,6 +93,7 @@ ad-hoc spelling (`feat(token)` is `feat(lex)`).
 | `interp` | Tree-walking interpreter (`--interpret`) |
 | `rt` | Emitted runtime — traps, division helpers |
 | `arena` | Allocator |
+| `cli` | Entry point, argument parsing, exit codes, stage flags |
 | `diag` | Diagnostic formatting and reporting machinery |
 | `test` | Test corpus, driver, property tests |
 | `spec` | Specification and decision documents |

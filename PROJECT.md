@@ -9,17 +9,18 @@
 
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
-**Working on:** Nothing in flight. The branch workflow (`m1/workflow`) and the rename to Krama
-(`m1/rename`) are merged; arena iteration 1 reviewed and closed, fatal-error module in place
+**Working on:** `m1/cli-args` — `main` takes one source path, plus the first test driver. Five
+commits planned (`krama-notes-15` §4); branch cut from `main` at 517b4f2, nothing committed yet
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`
 
-**Next up:** Initialize the arena in `main` — first stage under the new workflow, so the first real
-branch. Then AST node definitions — which also settle the block size. Then the diagnostic sink
-(STYLE.md §13 defers it to "before the lexer"), then the lexer.
+**Next up:** Finish `m1/cli-args`. Then the lexer stage — which carries the diagnostic sink
+(D-033), stop-at-first-error (D-034) and the `.expected` dump format, and must reconcile with spec
+§3 first (`krama-notes-11` §8). Arena initialization and AST node definitions follow the lexer, not
+precede it: the AST's input is the token, so it cannot be designed before one exists.
 
 **Deliberately incomplete** —
 
@@ -29,13 +30,13 @@ branch. Then AST node definitions — which also settle the block size. Then the
 | `arena.c` — mark/release | Absent | Nothing in milestone 1 reclaims early; the AST lives to teardown. Additive when multi-file arrives |
 | `arena.c` — alignment | Fixed at `alignof(max_align_t)` | Per-type alignment is a later refinement, STYLE.md §9.2 |
 | `arena.c` — ASan poisoning | Absent | `ASAN_POISON_MEMORY_REGION` on block creation, unpoison per allocation. Planned follow-up, STYLE.md §9.2 |
-| `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; same conversation as STYLE.md §13's testing conventions. First concrete case is D-029 |
+| `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; the Python driver of D-036 / D-037 is its seed. First concrete case is D-029 |
 | `tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
 | `Makefile` — `check` coverage | Runs the test build only; `src/main.c` is filtered out of it, so the production binary is never compiled by the gate | A break confined to `main.c` passes `check`. Fold `all` into `check` once `main.c` does more than exist |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
 | Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
-| `src/main.c` — source path | Hardcoded absolute path to a fixture, `/home/unrust/projects/krama/tests/krama_src/test.krm` | Breaks if the working copy moves — it already did once, during D-032. Goes when `main` takes a path argument, due with the arena initialization |
+| `src/main.c` — source path | Hardcoded absolute path to a fixture, `/home/unrust/projects/krama/tests/krama_src/test.krm` | Breaks if the working copy moves — it already did once, during D-032. Goes when `main` takes a path argument, due on `m1/cli-args` (`krama-notes-15` §4, commit 4) |
 | `tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 
 ---
@@ -470,6 +471,134 @@ path, which broke once already when the working copy was renamed.
 bump allocator over a `static` buffer, outside Krama. Session numbering is also owed — the
 `DECISIONS.md` template's `Session: ##` has never been filled in, and tying it to the note number is
 the cheapest fix, since both increment together.
+
+---
+
+### 2026-09-21 — Lexer before AST, first-iteration lexer design
+
+**Did.**
+
+1. Reordered the milestone: the lexer comes before AST node definitions, and the arena is no longer
+   tied to the next step. The test applied was "which stage has every input either built or
+   decided" — only the lexer passes, since the AST's input is the token, which does not exist yet.
+2. Settled the token buffer: one allocation of `n + 1` tokens, justified by a documented invariant
+   (every token covers at least one byte, no two share a byte, EOF is the only zero-width token) and
+   asserted on every append, per STYLE.md §9.3.
+3. Separated two tables that had been one: character classes (what the scanner reads) and token
+   kinds (what it emits). Whitespace and comments have classes and no kinds.
+4. Settled the scanner's shape: the first character picks the rule, and that rule alone decides
+   where the token ends. The "context flags" idea (`in_char_literal`) is not state — it is which
+   branch of the code is running.
+5. Queued two decisions, later recorded as **D-033** (the diagnostic sink is settled inside the
+   lexer stage, not before it) and **D-034** (stop at the first lexical error).
+
+**Worked.**
+
+1. Refusing to design the AST without its input. Reading chibicc's `struct Node` and harec's
+   `ast.h` side by side produced no decision, and the reason was structural: both are shaped by what
+   the parser needs to hold, and the parser does not exist. That was evidence the order was wrong,
+   not that the reading had failed.
+2. Tracing a concrete bad input through the whole pipeline. `let x$y: i32 = 1;` showed that the
+   parser only asks whether an identifier makes sense *in position*, never whether it is one, so
+   `x$y` would reach `cc`. That settled identifier validity as the lexer's job and produced the rule:
+   each phase rejects what it is the first able to see.
+3. Deriving the bound properly rather than from an example. `x+1` shows `n` tokens are *reachable*;
+   the *ceiling* needs the two invariants. The distinction is what makes the comment at the buffer
+   worth writing.
+
+**Didn't.**
+
+1. **`n / 2 + 1` as the token bound** — the first guess, assuming every token is followed by a
+   separator. `x+1` is three tokens in three bytes and the bound gives two, so the third append
+   overflows.
+2. **"A separator is a character."** A token ends wherever the next character cannot continue it;
+   `x` ends at `+` because `+` cannot be part of an identifier, not because `+` separates.
+3. **Recording errors and continuing**, for now — D-034. It is the better behaviour and it is
+   cheap in the lexer specifically, but nothing yet needs two errors from one run.
+4. **A milestone-plus-counter branch scheme** (`m1/lex:1/…`). `:` is illegal in a Git ref name, and
+   the merge commits on `main` already record order.
+
+**Friction.**
+
+1. **Claude stated twice that `krama-spec-v1.md` was not in the project files.** It was. The whole
+   first-draft design was worked out without consulting §3, which meant `#` (comments) and `@`
+   (builtins) were missing from the character table, `<`, `>`, `&`, `|`, `^`, `!`, `[`, `]` and `"`
+   were included despite not being in milestone 1, and maximal munch and keyword post-filtering were
+   treated as deferrable when §3.3 already requires them. Reconciled in `krama-notes-11` §8 — read
+   that section before writing the lexer.
+2. **A guessed bound looks like a proof.** `n / 2 + 1` reads as reasoning and is not; it survived
+   until a three-byte example was tried against it. Any fixed-capacity buffer now gets the
+   adversarial input written down next to the invariant.
+3. **`STYLE.md` §13's trigger contradicted its own premise.** The section says conventions are
+   settled when the work reaches them, yet the sink row said "before the lexer" — a guess about when
+   the need would arrive, made before any error existed to report. D-033 moves it.
+
+---
+
+### 2026-09-23 — Test harness, argument contract, corpus layout, commit plan
+
+**Did.**
+
+1. Studied Nora Sandler's test suite and settled what Krama keeps (corpus layout, per-stage runs,
+   accept/reject by exit status) and what it changes (content comparison at stage boundaries, rather
+   than treating the compiler as a black box).
+2. Scoped the branch now open as `m1/cli-args`: `main` takes exactly one argument, a file path.
+   Reframed what is testable — the **argument contract**, not the dump, since the dump does not
+   survive the lexer while the argument contract outlives every mode.
+3. Settled exit codes (**D-035**): a small owned enum, `KRM_` prefix, success `0`, remaining classes
+   from `2`, `1` left unused.
+4. Settled the corpus (**D-036**) and the driver (**D-037**): one TOML manifest per stage,
+   invocation explicit per case, expected dumps as sibling files, symbolic exit names, a Python
+   driver using the standard library only. The last of these amends spec §11.1 — the first change to
+   the spec since it closed.
+5. Fixed the branch's commit plan: docs, unit-test moves, Makefile part A, exit-code header and
+   `main`, then driver and fixtures. Added a `cli` scope to COMMITS.md, and tied `DECISIONS.md`'s
+   `Session` field to the note number, which the 2026-09-19 entry had flagged as owed.
+
+**Worked.**
+
+1. Separating inputs from results. The first manifest sketch had `Actual` and `Pass/Fail` columns —
+   a committed file the driver would rewrite on every run, dirtying the tree. Inputs only; results go
+   to stdout.
+2. Noticing that three of the six cases have no input file at all. "No argument", "two arguments"
+   and "a directory as the argument" are defined entirely by their invocation, which is why a
+   pairs-on-disk layout could not hold them and a manifest could.
+3. Reading what `PROJECT.md`'s row actually asked. "Fold `all` into `check`" asks for **compilation**
+   coverage — `main.c` is filtered out of the test build, so nothing compiles it — not for the
+   production binary to be *run*. That dissolved an apparent need to invent something for the gate to
+   invoke.
+4. Checking the commit order against COMMITS.md Rule 1 before writing anything. The first plan put
+   the driver before `main`, which would have failed `rebase --exec "make check"` at the merge gate.
+
+**Didn't.**
+
+1. **A `.expected` that duplicates the input.** With `main` dumping the file verbatim, the expected
+   output *is* the input — two files kept in sync by hand, both dead when the lexer lands.
+2. **Keeping a permanent dump mode** so the roundtrip stays testable. A flag whose only user is one
+   test, proving something every lexer case proves implicitly.
+3. **`--version` as the thing the gate runs.** Proves almost nothing and contradicts the
+   one-argument contract just decided.
+4. **`errno` values and `sysexits.h` as exit statuses** — D-035. Also **CSV** (quoting rules no
+   shell can parse), **directory-inferred invocation** (renaming a folder would change what the tests
+   do), and **a shell driver** (spec §11.1's original wording, amended by D-037).
+5. **Collapsing commits 4 and 5** to remove the one-commit window where `main`'s new behaviour has
+   no harness. The diff would be large and there would be nowhere to state the gap.
+
+**Friction.**
+
+1. **Exit code `1` is already taken.** A sanitized build exits `1` when ASan or UBSan fires
+   (notes-09 §9.1). Had `1` also meant "rejected the input as designed", the harness could not have
+   distinguished a correct rejection from a sanitizer catch, and the sanitized pass would have
+   stopped being a check without anything failing. Found late, while numbering the enum.
+2. **The catch-22 was only half seen.** "I cannot test `main` without the driver" is true; so is
+   "the driver cannot be tested without `main`". Something has to be first, and the question is which
+   untested window to accept — not how to avoid one.
+3. **Two builds, one filename.** A sanitized `kramac` and a production `kramac` writing to the same
+   path means the last build wins and the harness may silently run the wrong binary. Distinct output
+   paths, and `clean` has to know about both.
+4. **`krama-notes-12` closes with the pre-reorder milestone order** (arena init, AST nodes, sink,
+   lexer). It was written in the same session as the reorder and did not pick it up. Notes are
+   append-only records, so it stands — `krama-notes-11` supersedes it.
 
 ---
 

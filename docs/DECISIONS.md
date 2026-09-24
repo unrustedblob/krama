@@ -47,8 +47,16 @@ place.
 | D-030 | Short-lived local branches, merged with `--no-ff` | Decided | ## |
 | D-031 | Commit scope is optional; issue numbers go in trailers only | Decided | ## |
 | D-032 | The language is named Krama; `.krm`, `kramac` | Decided | ## |
+| D-033 | Diagnostic sink is settled inside the lexer stage, not before it | Decided | 11 |
+| D-034 | Stop at the first lexical error | Decided | 11 |
+| D-035 | Exit codes are a small owned enum, not `errno` or `sysexits.h` | Decided | 13 |
+| D-036 | Test corpus is one manifest per stage, invocation explicit | Decided | 14 |
+| D-037 | Test driver is Python, standard library only | Decided | 14 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
+
+**Session** is the numbered discussion note the entry came from (`krama-notes-NN-*`).
+Entries before D-033 predate that convention and carry `##`.
 
 ---
 
@@ -843,6 +851,266 @@ grows with every document.
 
 **Reference.** Grogono's Mouse (BYTE, July 1979); Koa.js; `jkingstonc/tav`; OpenBUGS `.bug`; GCC
 `-fstack-usage`; `krama-notes-09-git-make-workflow`.
+
+---
+
+### D-033 — Diagnostic sink is settled inside the lexer stage, not before it
+
+**Status:** Decided · **Session:** 11 · **Spec:** n/a (process) — amends STYLE.md §13
+
+**Decided.** The two STYLE.md §13 rows covering error-handling mechanics (propagation, return
+conventions, diagnostic sink shape) and the assertion mechanism move their trigger from *"Before the
+lexer"* to *"During the lexer stage, before it merges."* The gate is unchanged — no lexer stage
+merges without both settled — but the work may start before they are.
+
+**Rejected.**
+
+- *Keeping "Before the lexer."* Its merit is that spec §2.1 really does have the scanner emitting
+  diagnostics, so the lexer cannot be finished without a sink. Rejected because the trigger was a
+  guess at when the need would arrive, and the need arrives *inside* the stage: the first lexical
+  error is the first concrete thing a sink has to report. Designing against it beats designing
+  against an imagined version of it.
+- *Dropping the trigger and settling the sink whenever it becomes inconvenient.* Rejected because it
+  removes the gate. The rows exist so the sink is designed once, deliberately, rather than accreted
+  from whatever the first `fprintf` happened to do.
+
+**Why.** §13's own premise: each item is settled *"when the work reaches it, not before — a
+convention invented ahead of its first real use tends to be wrong in a way nobody notices until it
+is load-bearing."* The AST-first ordering put the sink before any error existed to report. Moving
+the trigger applies the premise the section already states, and costs nothing, because the merge
+gate still holds.
+
+**Consequences.**
+
+- The lexer stage may begin with no sink designed. What it may not do is merge.
+- A crude first report is expected and acceptable, provided it is emitted from **one place**, so
+  the sink later replaces a single call site rather than scattered writes.
+- D-034 is the first piece of the sink settled under this trigger.
+- The assertion mechanism row moves with it, since the two are halves of one question: how this
+  program reports that something is wrong.
+- STYLE.md version bumped for the amendment.
+
+**Revisit if.** The lexer stage grows large enough that "before it merges" stops being a meaningful
+bound — i.e. a stage's worth of error-reporting code accumulates before the shape is settled. The
+answer then is a smaller stage, not a later trigger.
+
+**Reference.** `krama-notes-11-lexer-design` §9; STYLE.md §13 preamble.
+
+---
+
+### D-034 — Stop at the first lexical error
+
+**Status:** Decided · **Session:** 11 · **Spec:** n/a — implementation behaviour, spec §3 is silent
+
+**Decided.** On encountering a lexical error the lexer reports it and stops; it does not scan on
+looking for further errors. The report is emitted from a single place and the process exits
+non-zero.
+
+**Rejected.**
+
+- *Record the error and keep scanning.* The stronger option on user experience: a file with three
+  stray bytes takes one compile to diagnose instead of three, and the lexer is the cheapest phase in
+  which to continue — skipping the offending byte needs no recovery heuristic, unlike the parser.
+  Rejected **for now** as premature: it makes the sink a collecting data structure before anything
+  has been collected, and nothing yet demands more than one error at a time.
+- *Stopping permanently.* Rejected — the multi-error case is a real need, just not this branch's.
+  Hence the trigger below rather than a "permanent" marking.
+
+**Why.** The simplest mechanism that proves the behaviour, extended once the behaviour is proven.
+The switch is cheap because the report has one call site: it changes what that call site does, not
+how the lexer is structured.
+
+**Consequences.**
+
+- The sink at this stage is a function that prints and exits, not a structure that collects.
+- A kind for a byte matching no rule barely earns its place under this decision — with the scan
+  stopping, no later phase ever consumes such a token; at most it carries the span and slice to the
+  report. Under the reverse decision it is what keeps the token stream intact past the bad byte.
+- **Invalid fixtures are written with exactly one lexical error each.** Their `.expected` output is
+  then identical under both behaviours and survives the switch untouched.
+- The token-buffer bound (every token covers at least one byte; EOF is the only zero-width token)
+  must survive whatever the sink becomes. A zero-width error token would be a second exception and
+  needs a second slot.
+
+**Revisit if.** A fixture needs two or more lexical errors reported from one run. The trigger
+announces itself: that fixture fails under stop-at-first, so the corpus reports the moment the
+decision expires. The step from one error to many is the hard one; from two to three is free
+(zero-one-infinity).
+
+**Reference.** `krama-notes-11-lexer-design` §5; zero-one-infinity rule.
+
+---
+
+### D-035 — Exit codes are a small owned enum, not `errno` or `sysexits.h`
+
+**Status:** Decided · **Session:** 13 · **Spec:** n/a — binary contract, observable by spec §11.1
+trap tests
+
+**Decided.** `kramac` exits with a value drawn from a small enum the project owns, declared in a
+header whose comment states that it is **the binary's public contract**, not an internal detail.
+Success is `0`. **The value `1` is left unused.** The remaining classes are numbered from `2`
+upward. Names are prefixed `KRM_` to stay clear of `<stdlib.h>`'s `EXIT_SUCCESS` / `EXIT_FAILURE`.
+Classes begin at success, usage error and input error; a compile-error class is added when there is
+something to reject. The specific names, numeric values beyond the `0`-then-from-`2` rule, and the
+header's filename are implementation detail and are not fixed here.
+
+**Rejected.**
+
+- *`errno` values as exit statuses.* Attractive because the classification already exists and
+  `ENOENT` says exactly what happened. Rejected on three counts: an exit status is 8 bits, and
+  values at or above 128 collide with the shell's "killed by signal N" convention; the `errno`
+  *symbols* are standard but the *integers* are not, so a fixture asserting `2` for a missing path
+  asserts a Linux detail; and it is the wrong granularity — one code per libc failure, where what is
+  wanted is a handful of stable classes.
+- *BSD `sysexits.h` (`EX_USAGE` 64, `EX_NOINPUT` 66, `EX_DATAERR` 65).* Genuine prior art with
+  agreed meanings. Rejected because it is not POSIX, most compilers ignore it (`gcc` returns 1 for
+  everything), and it is fifteen categories for a program that needs three. A list written one entry
+  at a time is one that can be held in the head without re-reading a header.
+- *Asserting only "non-zero" in fixtures.* Rejected because the fixture should record *what* was
+  being checked; a usage error and an unreadable file are different claims.
+
+**Why.** Three properties were needed at once: stable enough for fixtures to assert, small enough to
+remember, and distinguishable from the ways the process can fail for reasons that are not the
+program's own verdict.
+
+**Consequences.**
+
+- **`1` is reserved by the sanitizers.** A sanitized build exits `1` when ASan or UBSan fires
+  (notes-09 §9.1, `-fno-sanitize-recover=undefined`). If `1` also meant "rejected the input as
+  designed", the harness could not distinguish a correct rejection from a sanitizer catch, and the
+  sanitized pass would silently stop being a check.
+- **Values are append-only once a fixture asserts one.** Adding a class is free; renumbering an
+  existing one silently breaks every case that checks it.
+- The enum is **not** iterated over or used as an index; nothing depends on the values being
+  contiguous, which is what makes leaving `1` out harmless and leaves room for a different scheme
+  later.
+- The numbers are duplicated outside the header, in the test driver's mapping from symbolic name to
+  value, because a driver cannot include a C header. D-036 keeps that duplication to one place by
+  having manifests name classes symbolically.
+
+**Revisit if.** The classes stop being disjoint — for example, if a future need calls for composing
+them as bit flags, or for a class that is both a usage and an input problem. Nothing in this entry
+prevents that: only `0` for success and "start from `2`" are fixed.
+
+**Reference.** `krama-notes-13-argv-exit-codes` §7; `krama-notes-09-git-make-workflow` §9.1;
+`sysexits.h` (BSD).
+
+---
+
+### D-036 — Test corpus is one manifest per stage, invocation explicit
+
+**Status:** Decided · **Session:** 14 · **Spec:** §11.1
+
+**Decided.** Test cases are declared in a TOML manifest, **one per stage**, living in that stage's
+directory under `tests/`. Each case states its own invocation explicitly; nothing is inferred from a
+directory or file name. Expected outputs that are multi-line — token dumps and the like — stay as
+sibling files on disk, named by the manifest. Manifests hold **inputs only**: no actual output, no
+pass/fail. Expected exit statuses are written as **symbolic class names** (D-035), not numbers. The
+driver validates cases: required keys present, unknown keys rejected. Exact key names, file names
+and any defaults or group table are implementation detail, settled when the driver is written.
+
+**Rejected.**
+
+- *A CSV table with `Step, Desc, Expected, Actual, Pass/Fail`.* The original sketch. Rejected on two
+  grounds: `Actual` and `Pass/Fail` are results, and a committed file the driver rewrites dirties
+  the working tree on every run; and `Step` implies an ordering the cases do not have, with
+  numbered identity that rots as cases are inserted or deleted. Real CSV also brings quoting rules
+  no shell can parse.
+- *Pairs on disk with the invocation inferred from the directory* (Sandler's `valid/`,
+  `invalid_lex/`). Real merit: adding a case is adding files, so there is no central file to edit
+  and no merge conflict, and fifty content cases cost fifty rows of near-identical boilerplate under
+  a manifest. Rejected because renaming a directory would then change what the tests *do*, and
+  because it has nowhere to put a case with no input file — which is exactly the argument-handling
+  cases that prompted this.
+- *Tab-separated manifest.* Kept as the fallback and rejected only on ergonomics: `args` as one
+  field is word-split, so no fixture path may contain a space. TOML gives arrays of strings.
+- *Expected dumps inline in the manifest as multi-line strings.* Rejected: a wrong token becomes a
+  diff in the manifest rather than a one-line diff in a small file, the manifest grows to thousands
+  of lines, and it contradicts spec §11.1's `.krm` / `.expected` pairing.
+- *One manifest for the whole suite.* Rejected because a targeted run would load everything, and
+  because a per-stage file is discovered by walking `tests/` — adding a stage is adding a directory,
+  with no central registry to update.
+
+**Why.** Two kinds of case have to coexist: cases defined by their invocation, where every row
+genuinely differs, and content cases, where rows are boilerplate. A manifest is the only shape that
+holds the first kind at all. Making the invocation explicit — rather than inferred — is what keeps a
+rename from changing behaviour, and keeps the coupling between a folder name and an option name from
+existing in the first place.
+
+**Consequences.**
+
+- A full run is a **sorted** walk of `tests/`; `os.walk` order is not guaranteed across filesystems,
+  and unsorted output makes diffs jump around between runs.
+- Paths inside a manifest resolve **relative to the manifest**, so moving or renaming a stage
+  directory is a rename with no edits inside.
+- Failures report as `stage/case`; names need only be unique within their manifest.
+- The driver must reject unknown keys, or a typo (`stdderr`) silently makes a case assert nothing —
+  the failure mode a fixed-column format made obvious for free.
+- The driver takes optional filters (a stage, a case name) for development runs. **A filter never
+  changes the verdict**, the report states what was selected, and a filter matching nothing is an
+  error, not a vacuous pass.
+- Spec §11.1's `.krm` / `.expected` pairs survive as the content-case shape; the manifest names
+  them rather than replacing them.
+
+**Revisit if.** Content cases come to dominate the corpus and the boilerplate argument for
+convention-based discovery outweighs the explicitness gained here — at which point the manifest
+could gain a group or defaults table rather than inference, which is still explicit.
+
+**Reference.** `krama-notes-14-corpus-layout`; `krama-notes-12-test-harness` (Sandler's suite);
+spec §11.1.
+
+---
+
+### D-037 — Test driver is Python, standard library only
+
+**Status:** Decided · **Session:** 14 · **Spec:** §11.1 (amended by this entry)
+
+**Decided.** The test driver is written in Python, invoked explicitly as `python3`, using **only the
+standard library** — no third-party packages, no `pip install`. The floor is **Python 3.11**
+(`tomllib`, needed by D-036). Spec §11.1's "a shell driver" is amended accordingly, and its "zero
+dependencies" is restated as *standard library only*. **Building `kramac` never requires Python:**
+the interpreter is a test-side requirement only, and the version check lives in the driver or the
+`test` target, never in the default build path.
+
+**Rejected.**
+
+- *A shell driver, as spec §11.1 originally required.* Its merit is real and was the reason for the
+  original wording: no interpreter, no version floor, nothing to install anywhere the toolchain
+  already runs. Rejected on maintainability for this author — a driver that cannot be comfortably
+  read or extended is worse than a dependency, and the driver is about to become a development tool
+  rather than only a gate.
+- *Python without a version floor* (hand-rolling a TOML subset, or using JSON, to stay 3.8-compatible).
+  Rejected: hand-rolled parsers of real formats are a source of silent misreads, and JSON has no
+  comments and no trailing-comma tolerance.
+- *Treating the interpreter as a "dependency" in the sense §11.1 forbade.* Rejected on reading the
+  intent: what that clause protects against is a package-manager step between checkout and testing,
+  not the presence of an interpreter that ships with every current distribution.
+
+**Why.** The constraint worth keeping is *nothing to install*; the constraint not worth keeping is
+*shell specifically*. Python 3.11 shipped in October 2022 and is present in current distributions,
+which makes it a far shallower floor than the one the project already accepts for builds: D-019 pins
+`-std=c23` with a toolchain floor of GCC 14+ or Clang 18+. Having deliberately left backward
+portability behind on the build side, refusing a 2022 interpreter on the test side would be
+inconsistent.
+
+**Consequences.**
+
+- `tomllib` is standard library **only from 3.11**; distributions shipping 3.10 (Ubuntu 22.04) have
+  none. The driver must **check the version at start** and fail with a clear message rather than a
+  traceback on `import tomllib`.
+- Invoking `python3` explicitly, never bare `python`, avoids the version-alias trap.
+- `make all` must remain usable with no interpreter present. Only `make check` / `make test` may
+  require it.
+- D-019's floor is GCC 14 **or Clang 18** — the project is not GCC-only. If the driver ever
+  hardcodes a compiler name for the end-to-end tests (spec §11.1's "compile the generated C with
+  `cc`"), that assumption would collide with this and belongs in a decision of its own.
+- The first amendment to `krama-spec-v1.md`.
+
+**Revisit if.** The driver acquires a need that the standard library genuinely cannot meet, or the
+project gains a second maintainer for whom the shell/Python trade-off resolves differently.
+
+**Reference.** `krama-notes-14-corpus-layout` §4; `krama-notes-13-argv-exit-codes` §4; D-019; spec
+§11.1.
 
 ---
 

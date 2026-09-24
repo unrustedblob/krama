@@ -1,6 +1,6 @@
 # Krama — C Coding Standards
 
-**Version:** 1.4 · **Date:** 2026-08-15
+**Version:** 1.5 · **Date:** 2026-09-23
 **Status:** Final for milestone 1. Amend by addition when a rule is actually needed.
 **Target standard:** C23 (`-std=c23`, pinned)
 
@@ -787,9 +787,9 @@ Raise these rather than inventing a convention on the spot.
 
 | Item | Settle it when |
 |---|---|
-| Error handling mechanics — propagation, return conventions, diagnostic sink shape | Before the lexer. Spec §2.1 has the scanner emitting diagnostics. |
-| The assertion mechanism — `assert` compiles away under `NDEBUG`, which would remove internal invariant checks from release builds | Same conversation as the above; they are two halves of "how does this program report that something is wrong". |
-| Testing conventions — corpus layout, `.krm` / `.expected` naming, driver contract | Once the lexer produces output worth testing. |
+| Error handling mechanics — propagation, return conventions, diagnostic sink shape | During the lexer stage, before it merges. Spec §2.1 has the scanner emitting diagnostics, and the first lexical error is the first concrete thing a sink has to report (`D-033`). |
+| The assertion mechanism — `assert` compiles away under `NDEBUG`, which would remove internal invariant checks from release builds | Same conversation as the above; they are two halves of "how does this program report that something is wrong" (`D-033`). |
+| The dump format — what one line of a token or AST dump contains, and its field order | Once the lexer produces output worth testing. Corpus layout and the driver contract are settled (`D-036`, `D-037`); the format the `.expected` files hold is not. |
 | Build tooling — target chains, format gates, hooks, doc scripts | Phase 2. |
 
 Anything else that arises is an addition to this document, not a gap in it.
