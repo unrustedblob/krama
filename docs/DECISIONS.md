@@ -52,6 +52,7 @@ place.
 | D-035 | Exit codes are a small owned enum, not `errno` or `sysexits.h` | Decided | 13 |
 | D-036 | Test corpus is one manifest per stage, invocation explicit | Decided | 14 |
 | D-037 | Test driver is Python, standard library only | Decided | 14 |
+| D-038 | Transpiler targets POSIX.1-2008; emitted runtime stays ISO C | Decided | 16 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -1111,6 +1112,72 @@ project gains a second maintainer for whom the shell/Python trade-off resolves d
 
 **Reference.** `krama-notes-14-corpus-layout` §4; `krama-notes-13-argv-exit-codes` §4; D-019; spec
 §11.1.
+
+---
+
+### D-038 — The transpiler targets POSIX.1-2008; the emitted runtime stays ISO C
+
+**Status:** Decided · **Session:** 16 · **Spec:** §8.1 (by contrast)
+
+**Decided.** `kramac` itself may use POSIX.1-2008 interfaces. The first instance is `fstat` and
+`S_ISREG`, which answer "is this argument a regular file" by specification rather than by inference.
+`_POSIX_C_SOURCE 200809L` is defined in the single file that needs it, above every `#include`, and
+moves to `CFLAGS` only when a second file needs it. **This applies to the transpiler, not to its
+output**: the emitted C and its runtime remain portable ISO C, exactly as spec §8.1 requires. The
+two are different programs with different promises.
+
+**Rejected.**
+
+- *ISO-only, with a maximum source size.* Refusing any file over a cap (say 64 MB) would catch a
+  directory, since `ftell` on one returns an astronomical value on Linux, and a documented size
+  limit is a defensible thing for a compiler to have. Rejected because it is a **policy standing in
+  for a test**: it rejects legitimate large files it has no reason to refuse, and a directory small
+  enough to pass the cap would still reach `fread` and be misreported. For scale, the largest famous
+  hand-shipped single C file — SQLite's amalgamation — was over 8.4 MB at 238K lines in 2021, so a
+  cap would sit six or more times above anything real while still not answering the question asked.
+- *`errno == EISDIR` after the read fails.* The cheapest option: `EISDIR` is defined unconditionally
+  in `<errno.h>` on glibc, the BSDs and MSVC, so it needs no feature-test macro, no new header and
+  no `#ifdef`. Rejected because **POSIX does not specify** that opening a directory succeeds or that
+  reading one yields that errno; Linux behaves this way, older BSDs returned raw directory bytes
+  instead. It rests on observed behaviour where `fstat` rests on a contract.
+- *Leaving a directory argument classified as `ENV`.* Rejected: it is a misclassification, not
+  merely a vague message, and case 3b of the corpus exists specifically to catch it.
+- *`-std=gnu23` instead of the feature-test macro.* It would expose POSIX with no `#define` at all.
+  Rejected because D-019 pinned `-std=c23` deliberately, and `gnu23` also admits GNU **language**
+  extensions — a far larger change than one macro.
+- *`stat(path)` rather than `fstat(fileno(fp))`.* Rejected: looking the name up a second time opens
+  a TOCTOU window in which the file can change between the check and the read.
+
+**Why.** The detection has to be correct, not merely usually correct, because the exit class it
+produces is asserted by a fixture. Of the three routes, only `fstat` answers the question by
+specification. The portability cost turned out to be far smaller than assumed: **BSD is POSIX**, as
+are macOS, Solaris, illumos and WASI, so the only platform lost is native Windows — which the
+tooling had already excluded in practice.
+
+**Consequences.**
+
+- `fseek`, `ftell` and `rewind` disappear from the read path in favour of `st_size`, taking **two
+  failure paths** with them. The change removes more than it adds.
+- Feature-test macros are read when the first libc header is processed, so the `#define` must
+  precede **every** include. `fileno` is declared in `<stdio.h>` only when such a macro is active,
+  which is the same reason.
+- On glibc, defining `_POSIX_C_SOURCE` **disables `_DEFAULT_SOURCE`**, so BSD and GNU conveniences
+  outside POSIX.1-2008 (`asprintf`, `strsep`) become unavailable without a further macro. Treated as
+  a feature: anything reached for is specified rather than a libc nicety.
+- Native Windows toolchains are out (MSVC spells these `_fstat` and `_fileno`; MinGW and Cygwin
+  provide the POSIX names), along with freestanding targets that have no filesystem.
+- Much of the project already assumed a Unix host — spec §11.1 compiles the generated C with `cc`,
+  and the test driver is Python invoked from a Makefile (D-037). This makes that assumption explicit
+  in the source rather than implicit in the tooling.
+- A future POSIX call needs no new decision; it is an instance of this one. What still needs
+  justification is anything **outside** POSIX.1-2008.
+
+**Revisit if.** A Windows target ever matters, or the emitted runtime is ever tempted toward a
+POSIX interface — the latter would contradict spec §8.1 and is a different decision entirely. A
+second file needing the macro is not a revisit: it is the move to `CFLAGS` already described here.
+
+**Reference.** `krama-notes-16-exit-codes-posix` §6; D-019 (`-std=c23` and its toolchain floor);
+D-035 (exit classes); spec §8.1, §11.1.
 
 ---
 

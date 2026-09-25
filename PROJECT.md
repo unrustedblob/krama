@@ -10,17 +10,25 @@
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
 
 **Working on:** `m1/cli-args` — `main` takes one source path, plus the first test driver. Five
-commits planned (`krama-notes-15` §4); branch cut from `main` at 517b4f2, nothing committed yet
+commits planned (`krama-notes-15` §4), plus one unplanned docs commit for D-038, which came out of
+the work rather than ahead of it
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`
 
-**Next up:** Finish `m1/cli-args`. Then the lexer stage — which carries the diagnostic sink
-(D-033), stop-at-first-error (D-034) and the `.expected` dump format, and must reconcile with spec
-§3 first (`krama-notes-11` §8). Arena initialization and AST node definitions follow the lexer, not
-precede it: the AST's input is the token, so it cannot be designed before one exists.
+**Next up:** Finish `m1/cli-args`. Then `m1/fatal-cleanup`, a small branch settling what the fatal
+family is: rename `FATAL_*` to `KRM_FATAL_*`, fix the macro-prefix convention once (header guards
+included — `KRAMA_EXIT_CODES_H` is currently a third spelling), and make the arena's allocation
+failure exit `OOM` rather than `INTERNAL`, since `fatal()` currently derives its status from *how*
+to die rather than *why*. Reserve `KRM_ERR_PATH_EXIT` / `_GOTO` for the diagnostic family while
+there. It lands before the lexer, which is the first heavy user of both families.
+
+Then the lexer stage — which carries the diagnostic sink (D-033), stop-at-first-error (D-034) and
+the `.expected` dump format, and must reconcile with spec §3 first (`krama-notes-11` §8). Arena
+initialization and AST node definitions follow the lexer, not precede it: the AST's input is the
+token, so it cannot be designed before one exists.
 
 **Deliberately incomplete** —
 
@@ -31,13 +39,12 @@ precede it: the AST's input is the token, so it cannot be designed before one ex
 | `arena.c` — alignment | Fixed at `alignof(max_align_t)` | Per-type alignment is a later refinement, STYLE.md §9.2 |
 | `arena.c` — ASan poisoning | Absent | `ASAN_POISON_MEMORY_REGION` on block creation, unpoison per allocation. Planned follow-up, STYLE.md §9.2 |
 | `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; the Python driver of D-036 / D-037 is its seed. First concrete case is D-029 |
-| `tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
+| `tests/unit_tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
-| `Makefile` — `check` coverage | Runs the test build only; `src/main.c` is filtered out of it, so the production binary is never compiled by the gate | A break confined to `main.c` passes `check`. Fold `all` into `check` once `main.c` does more than exist |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
 | Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
 | `src/main.c` — source path | Hardcoded absolute path to a fixture, `/home/unrust/projects/krama/tests/krama_src/test.krm` | Breaks if the working copy moves — it already did once, during D-032. Goes when `main` takes a path argument, due on `m1/cli-args` (`krama-notes-15` §4, commit 4) |
-| `tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
+| `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 
 ---
 
