@@ -43,7 +43,6 @@ token, so it cannot be designed before one exists.
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
 | Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
-| `src/main.c` — source path | Hardcoded absolute path to a fixture, `/home/unrust/projects/krama/tests/krama_src/test.krm` | Breaks if the working copy moves — it already did once, during D-032. Goes when `main` takes a path argument, due on `m1/cli-args` (`krama-notes-15` §4, commit 4) |
 | `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 
 ---
