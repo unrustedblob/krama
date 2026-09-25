@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "./fatal.h"
+#include "fatal.h"
 
 constexpr size_t KB = 1024;
 constexpr size_t MB = KB * 1024;
