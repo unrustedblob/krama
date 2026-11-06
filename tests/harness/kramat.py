@@ -1,9 +1,4 @@
-##
-# Next Up: Validation of cases file
-# Pending: Implement parse_int...
-
 import argparse
-import platform
 import sys
 from collections import Counter
 from pathlib import Path
@@ -11,11 +6,13 @@ from typing import NamedTuple
 
 PROG = sys.argv[0]
 
-VERSION = platform.python_version()
-MIN_VERSION = "3.11"
-if VERSION < MIN_VERSION:
+MIN_VERSION = (3, 13)
+
+# This check only fires for version 3.12, any version before it would fail with
+# a SyntaxError
+if sys.version_info < MIN_VERSION:
     sys.exit(
-        f"{PROG}: VersionError: Minimum python version {MIN_VERSION} required. Current: {VERSION}"
+        f"{PROG}: VersionError: Minimum python version {MIN_VERSION[0]}.{MIN_VERSION[1]} required. Current {sys.version_info.major}.{sys.version_info.minor}"
     )
 
 # We check the minimum python version before the import
@@ -84,30 +81,28 @@ def parse_c_int(n: str) -> int | None:
     if n.upper().startswith("0X"):
         base = 16
         n = n.upper().removeprefix("0X")
-    if n.upper().startswith("0B"):
+    elif n.upper().startswith("0B"):
         base = 2
         n = n.upper().removeprefix("0B")
     elif n.startswith("0"):
         base = 8
         n = n.upper().removeprefix("0")
 
-    # Remove digit seperator e.g., 1'000'000 -> 1000000
+    # Remove digit separator e.g., 1'000'000 -> 1000000
     n = n.replace("'", "")
 
     val = 0
-    for i, c in enumerate(n):
-        if c >= "0" and c <= "9":
-            val += int(c) * (base**i)
-        elif c.upper() >= "A" and c.upper() <= "F":
-            try:
-                val += int(c.upper(), base) * (base**i)
-            except ValueError:
-                return None
+    for c in n:
+        val *= base
+        try:
+            val += int(c.upper(), base)
+        except ValueError:
+            return None
     return val
 
 
 def extract_exit_codes(header_file: Path, error_accumulator: list[str]) -> dict[str, int]:
-    """Extarct the KRM exit codes from exit_codes.h"""
+    """Extract the KRM exit codes from exit_codes.h"""
     with header_file.open() as f:
         lines = f.readlines()
 
@@ -135,11 +130,11 @@ def extract_exit_codes(header_file: Path, error_accumulator: list[str]) -> dict[
     latest = 0
     for exit_code, value in exit_codes.items():
         if value == DEFAULT:
-            exit_codes[exit_code] = latest + 1
+            exit_codes[exit_code] = latest
             latest += 1
         else:
-            latest = value
-    print(exit_codes)
+            latest = value + 1
+
     expected = {
         "KRM_EXIT_SUCCESS": 0,
         "KRM_EXIT_ERR_USAGE": 2,
@@ -170,11 +165,20 @@ def extract_exit_codes(header_file: Path, error_accumulator: list[str]) -> dict[
 def validate_case(case: dict, idx: int) -> list[str]:
     """Scans a raw case dictionary. Returns a list of errors found."""
     required = ["name", "args", "return_code", "stderr", "expected"]
-    missing = [f for f in required if case.get(f) is None]
-    if missing:
-        return [f"Case #{idx}: Missing required fields {missing}\nHas: {case.keys()}"]
 
     errors: list[str] = []
+    missing = [k for k in required if case.get(k) is None]
+    if missing:
+        errors.append(f"Missing required fields {missing}\nHas: {case.keys()}")
+
+    invalid = [k for k in case if k not in required]
+    if invalid:
+        errors.append(f"Has invalid fields {invalid}\nRequires: {required}\nHas: {case.keys()}")
+
+    if errors:
+        errors.insert(0, f"Case #{idx}")
+        return errors
+
     if not isinstance(case["name"], str):
         errors.append(f"'name': expected str, got {type(case['name']).__name__}")
     if not isinstance(case["args"], list):
@@ -191,23 +195,24 @@ def validate_case(case: dict, idx: int) -> list[str]:
         errors.append(f"'expected': expected str got {type(case['expected']).__name__}")
 
     if errors:
+        errors.insert(0, f"Case #{idx}")
         return errors
 
     commands = {"#derive", "#none"}
     if case["expected"].startswith("#"):
         if case["expected"] not in commands:
             errors.append(f"'expected': Invalid command {case['expected']}\nValid: {commands}")
-        elif case["expected"] == "#derive" and (
-            len(case["args"]) != 1 or not case["args"][0].endswith(".krm")
-        ):
-            errors.append(
-                f"'expected' is #derive: Incompatible 'args'\nExpected only one argument, a .krm file\nHas: {case['args']}"
-            )
+        elif case["expected"] == "#derive":
+            krm_files = [arg for arg in case["args"] if arg.endswith(".krm")]
+            if len(krm_files) != 1:
+                errors.append(
+                    f"'expected' is #derive: Expected: 1 .krm file in 'args'\nHas: {krm_files}"
+                )
     elif not case["expected"].endswith(".expected"):
-        errors.append(f"'expected': Expoected .expected file or a command\nGot: {case['expected']}")
+        errors.append(f"'expected': Expected .expected file or a command\nGot: {case['expected']}")
 
     if errors:
-        errors.insert(0, "Case #{idx}")
+        errors.insert(0, f"Case #{idx}")
     return errors
 
 
@@ -223,10 +228,10 @@ def load_stage_manifest(stage: str, toml_path: Path, error_accumulator: list[str
         with open(toml_path, "rb") as f:
             toml_data = tomllib.load(f)
     except tomllib.TOMLDecodeError as e:
-        error_accumulator.append(f"Stage {stage}: TOMLDecodeError: {e}")
+        error_accumulator.append(f"ManifestError: Stage {stage}: TOMLDecodeError: {e}")
         return []
-    except OSError:
-        sys.exit("{PROG}: OSError: {e}\nexiting...")
+    except OSError as e:
+        sys.exit(f"{PROG}: OSError: {e}\nexiting...")
 
     if toml_data == {}:
         error_accumulator.append(
@@ -248,6 +253,17 @@ def load_stage_manifest(stage: str, toml_path: Path, error_accumulator: list[str
         )
         return []
 
+    if not toml_data["case"]:
+        error_accumulator.append(f"ManifestError: Stage {stage} 'case' is empty")
+        return []
+
+    for elem in toml_data["case"]:
+        if not isinstance(elem, dict):
+            error_accumulator.append(
+                f"ManifestError: Stage {stage}: Elements of 'case' must be tables"
+            )
+            return []
+
     case_errors: list[str] = []
     for idx, case in enumerate(toml_data["case"], start=1):
         case_errors.extend(validate_case(case, idx))
@@ -259,7 +275,7 @@ def load_stage_manifest(stage: str, toml_path: Path, error_accumulator: list[str
     names = [c.get("name") for c in toml_data["case"]]
     dupes = [v for v, n in Counter(names).items() if n > 1]
     if dupes:
-        error_accumulator.append(f"Manifest Error: Stage {stage}: Duplicate names found")
+        error_accumulator.append(f"ManifestError: Stage {stage}: Duplicate names found")
         for i, n in [(i, n) for i, n in enumerate(names, start=1) if n in dupes]:
             error_accumulator.append(f"Case #{i}: {n}")
         return []
@@ -269,13 +285,6 @@ def load_stage_manifest(stage: str, toml_path: Path, error_accumulator: list[str
 
 def main():
     ctx = init_context()
-    validate_environment(ctx)
-
-    valid_stages = [s.name for s in ctx.stage.iterdir() if s.is_dir()]
-    if not valid_stages:
-        sys.exit(
-            f"{PROG}: EnvironmentError: No stages available to test\nSearching directory: {ctx.stage}"
-        )
 
     parser = argparse.ArgumentParser(description="Test harness for kramac")
     _ = parser.add_argument(
@@ -286,14 +295,25 @@ def main():
     )
     args = parser.parse_args()
 
-    target_stages = resolve_target_stages(args.stage, valid_stages)
+    validate_environment(ctx)
+
+    valid_stages = [s.name for s in ctx.stage.iterdir() if s.is_dir()]
+    if not valid_stages:
+        sys.exit(
+            f"{PROG}: EnvironmentError: No stages available to test\nSearching directory: {ctx.stage}"
+        )
+    if "all" in valid_stages:
+        sys.exit(f"{PROG}: EnvironmentError: Found stage named 'all'; reserved to run all stages")
+
+    target_stages = sorted(resolve_target_stages(args.stage, valid_stages))
+
     contract_errors: list[str] = []
     exit_codes = extract_exit_codes(ctx.header, contract_errors)
     if contract_errors:
         sys.exit(
             f"{PROG}: ContractError: Error extracting error codes\n{'\n~'.join(contract_errors)}"
         )
-    print(exit_codes)
+    _ = exit_codes  # TODO(#21) - Needs to check against the output of kramac --dump-exit-codes
 
     manifest_errors: list[str] = []
     runnable = {}
@@ -305,11 +325,10 @@ def main():
 
     if manifest_errors:
         print(f"{PROG}: Manifest errors detected\n", file=sys.stderr)
-        print(f"{'\n~'.join(manifest_errors)}")
+        print(f"{'\n~'.join(manifest_errors)}", file=sys.stderr)
         sys.exit(1)
 
     # [TODO] Run cases...
-    print(target_stages)
 
 
 if __name__ == "__main__":
