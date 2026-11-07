@@ -109,7 +109,7 @@ def extract_exit_codes(header_file: Path, error_accumulator: list[str]) -> dict[
     extracted_lines = [
         line.strip().removesuffix(",")
         for line in lines
-        if not line.startswith("//") and "KRM_EXIT_" in line
+        if not line.strip().startswith("//") and "KRM_EXIT_" in line
     ]
     exit_codes: dict[str, int] = {}
 

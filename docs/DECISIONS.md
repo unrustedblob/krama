@@ -53,6 +53,7 @@ place.
 | D-036 | Test corpus is one manifest per stage, invocation explicit | Decided | 14 |
 | D-037 | Test driver is Python, standard library only | Decided | 14 |
 | D-038 | Transpiler targets POSIX.1-2008; emitted runtime stays ISO C | Decided | 16 |
+| D-039 | The harness parses `exit_codes.h` for its exit-code map | Decided | 18 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -1180,6 +1181,60 @@ second file needing the macro is not a revisit: it is the move to `CFLAGS` alrea
 D-035 (exit classes); spec §8.1, §11.1.
 
 ---
+
+### D-039 — The harness parses `exit_codes.h` for its exit-code map
+
+**Status:** Decided · **Session:** 18 · **Spec:** n/a (test tooling) — supersedes one consequence of
+D-035
+
+**Decided.** The test driver builds its exit-name → value map by parsing `src/exit_codes.h` on every
+run; no copy of the values exists in the harness. The parser is deliberately light: it does not
+scope to the enum, reject unknown lines, or handle trailing comments. A self-check guards the
+result: `KRM_EXIT_SUCCESS == 0`, `KRM_EXIT_ERR_USAGE == 2`, no value is `1`, and no two names share
+a value. A cross-check against `kramac --dump-exit-codes` is the final guard and lands with `--lex`.
+
+**Rejected.**
+
+- *A hand-kept map in the driver.* The arrangement D-035 described, and the simplest thing that
+  works. Rejected because two copies of the values drift, and a drifted map gives wrong verdicts
+  without failing anything.
+- *X-macros* — one list generating both the enum and the name strings. A real single source of
+  truth on the C side. Rejected as machinery the project does not need for a handful of classes,
+  and it still leaves the Python side needing a reader.
+- *Program-side metadata* — kramac printing its exit class under a test macro. It would give the
+  harness richer failure information. Rejected on three counts: the harness runs `kramac-san`, which
+  is not built with `-DKRAMA_TEST_SUITE`; on stderr it would make stderr never empty, so the
+  non-empty assertion would pass vacuously; and the exit code already carries the class, so a second
+  channel can only disagree with it.
+- *A hardened parser* — scoping to the enum and treating any unrecognised line inside it as an error
+  (krama-notes-20 §3). It closes the misread window now. Rejected because the dump cross-check makes
+  it redundant; hardening the parser first is work the cross-check replaces.
+
+**The question.** Where does the harness get the mapping from exit-class name to number, and how
+much should it trust its own reading of a C header?
+
+**Why.** The header is the binary's public contract (D-035), so it is the one place the values
+should live. Reading it on every run means the harness always judges against the codes on disk. The
+parser can stay light because the build already guarantees the header is valid C, the self-check
+catches the misreads that matter most, and the planned cross-check compares against values the
+compiler itself computed.
+
+**Consequences.**
+
+- **D-035's last consequence no longer holds:** the numbers are not duplicated in the driver.
+- **`exit_codes.h` is a parsed format.** Its header comment states the rules the parser depends on
+  (krama-notes-20 §4) and no longer says the driver duplicates the numbers.
+- **A window until `--lex`:** a misspelled enumerator compiles and can silently shift every later
+  value. Tracked as issue #21 and recorded in PROJECT.md's *Deliberately incomplete* table.
+- `parse_c_int` assumes a literal the compiler accepted; expressions such as `(1 << 3)` are not
+  handled.
+- `--dump-exit-codes` is public interface and needs its own entry and a spec note when it lands.
+
+**Revisit if.** The #21 cross-check finds a mismatch the parser caused, or a gap appears in the
+cross-check itself.
+
+**Reference.** `krama-notes-18-case-manifest` §4–§5; `krama-notes-19-driver-shape` §8;
+`krama-notes-20-driver-pseudocode` §3–§5; `krama-notes-21-review-r001` §3; issue #21; D-035.
 
 ### D-0XX — [Template]
 

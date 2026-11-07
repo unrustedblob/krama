@@ -1,12 +1,17 @@
 // [PUBLIC] kramac's exit statuses — the contract between this binary and
-// whatever runs it. The test driver duplicates these numbers, because a
-// Python driver cannot include a C header, so this file is the single
-// source of truth and the driver's mapping follows it.
+// whatever runs it. The test driver parses this file to extract the exit codes
+// on every run; keep to these rules or its map goes wrong.
+//
+// 1. One enumerator per line
+// 2. No trailing comments on enumerator lines
+// 3. Explicit values are plain integer literals, no expressions
 //
 // Values are append-only once a fixture asserts one: adding a class is
 // free, renumbering an existing one silently breaks every case that
-// checks it. See D-035 for why 1 is skipped and why these classes were
+// checks it.
+// See D-035 for why 1 is skipped and why these classes were
 // cut along whose fault the failure is, rather than which call failed.
+// See D-039 for why the harness parses this file.
 
 #ifndef KRAMA_EXIT_CODES_H
 #define KRAMA_EXIT_CODES_H
