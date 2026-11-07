@@ -10,29 +10,35 @@
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print` — to be descoped (see
 Next up)
 
-**Working on:** Closing `m1/cli-args`, cut short. `main` takes one source path and exits with an
-owned class (D-035, D-038); the harness's parts 1–2 are in — pre-checks, parsing `exit_codes.h`
-(D-039), manifest validation — reviewed as r001 (#16–#20, closed). Fixtures, the runner and
-Makefile part B move to a later branch, because the fixtures depend on a syntax that does not exist
-yet
+**Working on:** `m1/workflow-2` — the first branch under D-041, which supersedes D-030: stage
+branches are pushed and pushed history is final; cleanup moves to a push gate
+(`rebase -i --exec "make check" @{upstream}`); reviews live in `docs/review/` and are filed as
+issues titled `<branch>-rNNN · <group>: <summary>`, with findings stated as failing inputs and
+follow-up passes rerunning them with fresh outliers; one `Closes:` line per issue. Records:
+DECISIONS.md (D-041, the `DR-OWED` convention), COMMITS.md, `docs/review/README.md`,
+`krama-notes-22`. `m1/cli-args` is merged — the last merge under D-030
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`. The harness is not in the gate
 
-**Next up:** Merge `m1/cli-args` with `--no-ff` — the last merge under D-030. No rewrite before it:
-#16–#21 reference these commits, so the per-commit check is `git rebase --exec "make check" main`
-with hashes confirmed unchanged.
+**Next up:** Finish `m1/workflow-2` under its own rules — commit, push from the first logical commit,
+merge with `--no-ff`, delete the remote branch. Confirm r001's #17–#20 are closed: the fix commit's
+comma-listed `Closes:` closed only #16 (`aside-notes-06`).
+
+**Paused detour:** `remote-tracking` (score 5) — the lab in `learning/remote-tracking/packet.md`,
+accepted 2026-10-21 and put on hold 2026-10-23. Nothing waits on it now that D-041 answered Rule 4's
+scope; it conflicts with `portability-layers` under the one-active-detour rule (CLAUDE.md §8.7).
 
 Then, branch order decided after the merge:
 
-- **The M1 descope and workflow 2.0** — the arena cull, the `story/` layout, spec v2 with the new
-  syntax, and an entry superseding D-030 (pushed branches, the review process). Settle when `Refs:`
-  trailers go in, and whether reviewed commits may be rewritten, before the first merge under it.
+- **The M1 descope** — the arena cull, the `story/` layout, spec v2 with the new syntax
+  (DR-OWED-A02-01 … -06, `aside-notes-02`, `aside-notes-04`).
 - **The harness remainder** — `tests/stage/args/` with its six cases written in the new syntax, the
   runner (`krama-notes-20` Appendix A.3), and Makefile part B wiring the harness into `check`.
-- **`m1/ground-up`** — renumbered: its entries become D-041 and D-042, STYLE.md 1.7.
+- **`m1/ground-up`** — DR-OWED-A01-01 and -02 (`aside-notes-01`), numbered when they land; STYLE.md's
+  version likewise.
 - **`m1/fatal-cleanup`** — the `KRM_FATAL_*` rename and the macro-prefix convention. Its arena-OOM
   item goes with the cull.
 
@@ -48,7 +54,8 @@ Then, branch order decided after the merge:
 | `tests/unit_tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
-| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
+| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. The `pre-push` hook is now the one worth writing: reject pushed commits whose subject starts `wip`, `fixup!` or `squash!` (D-041), not `make check`. Revisit the others once the first few merges under D-041 are habitual |
+| `CLAUDE.md` — tracking | Undecided; the repository's copy is 1.1 without `/ground-up`, the project context's copy carries it | DR-OWED-A01-02, on `m1/ground-up`. Nothing tracked depends on it: the review rules live in `docs/review/README.md` |
 | `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 | `src/main.c` — argument contract | **Untested.** The harness validates manifests but has no runner, no fixtures, and is not in `make check`; commit 4's one-commit window stays open | The harness-remainder branch, after the descope. The fixtures need the new syntax |
 | `tests/harness/kramat.py` — header parser | Light: no enum scoping, no rejection of unknown lines inside the enum, no trailing comments. A misspelled enumerator compiles and silently shifts later values | Closed by the `--dump-exit-codes` cross-check, #21 (D-039). `exit_codes.h`'s header comment states the format rules meanwhile |
@@ -690,6 +697,80 @@ stdout is unchecked under `#none` and `main` still dumps the file.
 **Note for next session.** Settle when `Refs:` trailers go in, and whether reviewed commits may be
 rewritten, before the first merge under workflow 2.0: D-030's `rebase -i` and the review links
 contradict each other. The alignment exercise is still untouched.
+
+---
+
+### 2026-10-20 → 2026-11-08 — Workflow 2.0, reviews as issues, owed decisions
+
+**Did.**
+
+1. Superseded D-030 with **D-041**: stage branches are pushed and pushed history is final, so Rule 4
+   covers every pushed ref and nothing is force-pushed. Cleanup moved from the merge gate to a push
+   gate (`rebase -i --exec "make check" @{upstream}`); the squash at merge is gone; no pull
+   requests; remote branches deleted after merging.
+2. Wrote the review rules as `docs/review/README.md`: one file per pass with a **Follows** field,
+   findings stated at their escalation step — failing inputs, not locations — and follow-up passes
+   that rerun them with fresh outliers. Issues are titled `<branch>-rNNN · <group>: <summary>`.
+   COMMITS.md keeps only the git side; CLAUDE.md §5.3 points at the README.
+3. `Closes:` now takes one line per issue (`aside-notes-06`).
+4. Adopted **`DR-OWED-<source>-NN`** for decisions reached but not yet written. Relabelled the asides,
+   the ledger and `krama-notes-21`; DECISIONS.md *Notes on use* and CLAUDE.md §6 carry the rule.
+5. Discussions held as asides, not yet built: the M1 descope (`aside-notes-02`), the project cull
+   and layout (`aside-notes-04`), and the workflow itself (`aside-notes-03`, promoted to
+   `krama-notes-22`).
+
+**Worked.**
+
+1. **A requirement settled what an experiment was meant to.** "Issues must point at commits that
+   exist" answered Rule 4's scope and the force-push question outright; the lab built to decide them
+   was no longer needed for that.
+2. **Checking GitHub against its own documentation.** The comma-list failure was confirmed from
+   GitHub's docs — one keyword per reference — rather than worked around.
+3. **Reviews as the escalation, written down.** Outliers derived at rerun time test whether the
+   defect was understood, not whether the shown cases were patched. r001's fix round — every `9`
+   rejected while the table passed — is the case it is built for.
+4. **Placing rules by audience.** The review format left COMMITS.md once the question "why is it
+   here?" was asked; the README sits beside the reviews it governs.
+
+**Didn't.**
+
+1. **Force-pushing stage branches with `--force-with-lease`** — every rewrite orphans the commits an
+   issue links to.
+2. **Pull requests** — one contributor; a second place to look.
+3. **A `pre-push` hook running `make check`** — a slow hook trains `--no-verify`.
+4. **Trailers added only at a cleanup rebase** — moot once pushed history is final.
+5. **The review format in COMMITS.md** — moved to `docs/review/README.md`.
+6. **`/ground-up` declined: incremental compiler construction**, scored 6 (explained back and
+   extended unprompted; not yet compared with when it is the wrong approach). Reason: there is no
+   formed language whose retrofitting cost could be weighed (`aside-notes-02` §11.1).
+
+**Friction.**
+
+1. **A comma-listed `Closes:` closed one issue.** r001's fix commit carried
+   `Closes: #16, #17, #18, #19, #20`; only #16 closed. Claude Code then attributed the comma form to
+   COMMITS.md, which never contained it.
+2. **Pre-assigned decision IDs went stale twice.** `/ground-up`'s D-039 and D-040 were taken by the
+   harness decisions, then its promised D-041 and D-042 were taken by the order of merges. Two notes
+   and several replies cited numbers that pointed at the wrong entries.
+3. **Two copies drifted.** The project context and the repository disagreed on COMMITS.md and
+   DECISIONS.md numbering, and now hold two different CLAUDE.md 1.1 files. Mirroring the repository's
+   paths in the context is what made the drift visible.
+4. **D-041's index row and D-030's status went in without the entry body.** Found while moving the
+   review rules; the entry was then written.
+
+**Stubbed.** Two rows in *Deliberately incomplete*: the `pre-push` hook now has a defined job
+(reject `wip`, `fixup!`, `squash!`) and is unwritten; CLAUDE.md's tracking is undecided, owed as
+DR-OWED-A01-02.
+
+**Next.**
+
+1. Merge `m1/workflow-2`; check each `Closes:` issue shows closed; delete the remote branch.
+2. Confirm r001's #17–#20 are closed.
+3. Branch order after that: the M1 descope, the harness remainder, `m1/ground-up`,
+   `m1/fatal-cleanup`.
+
+**Note for next session.** The `remote-tracking` detour is paused, and `portability-layers` is still
+open — the one-active-detour conflict is unresolved. The alignment exercise is still untouched.
 
 ---
 

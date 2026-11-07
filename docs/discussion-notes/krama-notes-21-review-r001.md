@@ -155,7 +155,9 @@ reviews there are public pages. Deliberate, or move to `story/review/`.
 ## 7. Numbering, branch, next
 
 - **Numbering:** D-039 (driver parses the header), D-040 (Python 3.13). `m1/ground-up`'s entries
-  move to **D-041/D-042**; STYLE.md 1.6 here, 1.7 there.
+  stay owed — DR-OWED-A01-01 / -02 — and are numbered when they land; STYLE.md 1.6 here.
+  *(Updated 2026-11-08: pre-assigned IDs dropped under the DR-OWED convention, `krama-notes-22` §9.
+  D-041 went to workflow 2.0.)*
 - **Branch:** continue `m1/cli-args` — the harness validates but runs no case and `make check` does
   not call it; merging would put a gate on `main` that cannot fail.
 - **Commit 5 remaining:** records (step 6) → fixtures (step 3) → runner (part 3) → Makefile part B

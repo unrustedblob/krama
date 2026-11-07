@@ -1,7 +1,8 @@
 # Krama — Commit Conventions
 
-Covers commit messages, branches and merging. The reasoning behind the branch and merge workflow is
-`D-030`; the reasoning behind optional scopes and issue trailers is `D-031`.
+Covers commit messages, branches, pushing and merging, and the git side of reviews. The reasoning behind the branch,
+push and merge workflow is `D-041` (superseding `D-030`); the reasoning behind optional scopes and
+issue trailers is `D-031`.
 
 ---
 
@@ -114,20 +115,26 @@ Refs: D-014
 Refs: D-003, D-011
 Refs: #7
 Closes: #12
+Closes: #13
 ```
 
 | Trailer | Meaning | Effect on GitHub |
 |---|---|---|
 | `Refs: D-###` | Implementation choice traces back to a `DECISIONS.md` entry | none |
 | `Refs: #N` | Commit is *part of* the work on an issue | links the commit to the issue |
-| `Closes: #N` | Commit *finishes* the issue | links, and closes the issue when the commit reaches `main` on GitHub |
+| `Closes: #N` | Commit *finishes* the issue | links, and closes the issue when the commit reaches the default branch (`main`) on GitHub |
 
 - **`Refs: D-###`** makes `git log --grep="D-014"` return every commit touching that decision.
 - **`Closes:` goes on the logical commit that does the fixing**, not only on the merge commit, so
   the closure points at the actual change. Repeating the issue in the merge body is harmless.
 - GitHub accepts the colon and any capitalisation (`Closes: #10`). Only its closing keywords close
   an issue — `close(s|d)`, `fix(es|ed)`, `resolve(s|d)`. `Refs:` never closes anything.
-- With local-only branches, nothing reaches GitHub until `main` is pushed; issues close at that push.
+- **One closing keyword per issue.** GitHub binds a keyword to the single reference after it;
+  `Closes: #16, #17` closes #16 and only mentions #17. Write one `Closes:` line per issue. Several in
+  one commit is fine. `Refs:` may stay a list — it never closes anything.
+- **Issues close when the fixing commit reaches `main`**, not when it is pushed on a stage branch.
+  The closing event still points at the fixing commit. After pushing `main`, check each one shows
+  `closed`, not `referenced`.
 
 ---
 
@@ -151,15 +158,32 @@ m<N>/<stage>
 
 - **Short-lived: one branch per stage.** Created from an up-to-date `main`, merged, deleted. The next
   stage branches from the updated `main`. No long-lived `dev` or `milestone-N` branch.
-- **Local only. Branches are never pushed.** This keeps them freely rewritable (Rule 4) and removes
-  the question of whether rewriting a pushed branch is allowed. The cost: unmerged work exists on one
-  machine only — another reason to keep stages small.
+- **Pushed. Pushed history is final.** Branches are pushed so that review issues link to commits that
+  exist. Once pushed, a commit is never rewritten (Rule 4). Clean up before pushing — see *Pushing*.
 - **Branch from a fresh `main`.** Pull first. A stale local `main` reintroduces the long-lived-branch
-  problem `D-030` exists to avoid. To confirm, `git merge-base main <branch>` on a new branch should
-  print the same hash as `git rev-parse main`.
-- **Delete after merging** with `git branch -d`. After a `--no-ff` merge the branch tip is reachable
-  from `main`, so `-d` succeeds. If `-d` refuses, the branch is *not* merged — investigate rather
-  than reaching for `-D`.
+  problem `D-030` was written to avoid. To confirm, `git merge-base main <branch>` on a new branch
+  should print the same hash as `git rev-parse main`.
+- **Delete after merging**, locally with `git branch -d` and remotely with
+  `git push origin --delete <branch>`, then `git fetch --prune`. After a `--no-ff` merge the branch
+  tip is reachable from `main`, so `-d` succeeds and issue links still resolve. If `-d` refuses, the
+  branch is *not* merged — investigate rather than reaching for `-D`.
+
+---
+
+## Pushing
+
+Rewrite freely until a commit is pushed; never after.
+
+- **`wip` commits are never pushed.** Squash or `reset --soft` them into logical commits first.
+- **The push gate.** Before each push:
+
+  ```
+  git rebase -i --exec "make check" @{upstream}
+  ```
+
+  `@{upstream}` is the branch as last seen on GitHub, so only unpushed commits are touched. On a
+  branch's first push there is no upstream: use `main`, then `git push -u origin <branch>`.
+- **Push before review.** A review describes commits that exist on GitHub (see *Reviews*).
 
 ---
 
@@ -169,13 +193,12 @@ m<N>/<stage>
 
 A branch merges into `main` only when all of these hold, in this order:
 
-1. **Cleaned up and checked per commit.** `git rebase -i --exec "make check" main` — squash noise into
-   logical commits (Rule 3); `make check` runs after *every* rewritten commit and stops at the first
-   failure. Passing at the branch tip alone is not sufficient: a rebase creates intermediate states
-   that never existed while working.
-2. **Reviewed after the rebase.** `git diff main...<branch>` (three dots — everything the branch
-   changed since it left `main`) against STYLE.md §14. A review done before the rebase covered code
-   that may no longer exist. If the review produces fix commits, return to step 1.
+1. **Every commit checked.** Each was checked at the push gate. If `main` has not moved since the
+   branch was cut, `git rebase --exec "make check" main` re-checks them all without changing a hash.
+   If `main` has moved, do not rebase — the `--no-ff` merge absorbs it.
+2. **Reviewed.** Every review's issues are closed by commits on the branch, or explicitly carried.
+   `git diff main...<branch>` (three dots — everything the branch changed since it left `main`) is
+   the whole of what is merging.
 3. **The stage's goal is complete.** A half-built stage can pass every check.
 4. **Records updated.** `PROJECT.md` log entry; `DECISIONS.md` if anything was decided.
 
@@ -188,7 +211,8 @@ A branch merges into `main` only when all of these hold, in this order:
   The label is the exact branch string; the subject follows the ordinary subject-line rules.
 - **Body: the dense stage summary.** What the stage delivered and why, across all its commits. This
   is where `main`'s story is told.
-- **Trailers:** `Refs:` for every decision the stage touched; issues optionally repeated.
+- **Trailers:** `Refs:` for every decision the stage touched. Issues are closed by the fixing
+  commits, not here; mentioning them in the body is harmless.
 
 ```
 m1/arena: add bump allocator over chained blocks
@@ -213,6 +237,18 @@ Refs: D-003, D-027, D-028, D-029
 
 ---
 
+## Reviews
+
+How a review is written, filed and followed up is `docs/review/README.md`. Its git side:
+
+- **Push before review.** A review covers commits that exist on GitHub.
+- **Fix commits carry the trailers** — `Refs: #N` on a partial fix, `Closes: #N` (one line per issue)
+  on the commit that finishes it. See *Trailers*.
+- **A fix that fails a follow-up pass stays open.** Its issue is carried, not closed, so no
+  `Closes:` goes on that commit.
+
+---
+
 ## Rules
 
 **1. Every commit on `main` builds and passes tests.**
@@ -222,7 +258,8 @@ automatically locating a regression across a hundred commits. A history of half-
 bisect useless, which forfeits the main practical payoff of version control as a debugging tool.
 
 "Every commit" includes each logical commit brought in by a merge, not just the merge commit —
-bisect walks into them. Enforced by `rebase --exec "make check"` at the merge gate.
+bisect walks into them. Enforced by `rebase -i --exec "make check"` at the push gate: a commit that
+reaches GitHub broken stays in history.
 
 **2. One logical change per commit — not one file.**
 
@@ -232,7 +269,7 @@ Group by change, not by file.
 
 **3. Squash noise, keep structure.**
 
-Commit freely on the branch (`wip`, `fix build`, `typo`), then rewrite before merging —
+Commit freely on the branch (`wip`, `fix build`, `typo`), then rewrite **before pushing** —
 `git rebase -i`, or `git commit --fixup=<sha>` with `git rebase --autosquash`.
 
 Squash into **N logical commits, not one.** A week on the lexer might legitimately be three: token
@@ -244,8 +281,9 @@ commit (see *Merging*).
 
 **4. Never rewrite pushed history.**
 
-Rebase freely on a local branch. Branches are never pushed, so they are always rewritable until
-merged. After `main` is pushed, corrections are new commits.
+Rebase freely on commits that have not been pushed. Every pushed ref — `main` and stage branches
+alike — is final: corrections are new commits. A review issue links to pushed commits, and a rewrite
+would leave it pointing at commits no branch holds.
 
 **5. Git history is not the day log.**
 
@@ -322,7 +360,10 @@ refactor(parse): extract operand loop from additive and multiplicative
 - **`pre-commit` hook: keep it fast.** Build and format check only. Once a hook takes fifteen
   seconds, `--no-verify` becomes reflex and the enforcement is theatre.
 
-- **`pre-push` hook** running `make check`. A slow check is tolerable where it runs rarely.
+- **`pre-push` hook rejecting unsquashed commits.** For each ref pushed, read the subjects of the
+  commits leaving the machine (`main..local` for a new branch, `remote..local` otherwise) and refuse
+  any starting `wip`, `fixup!` or `squash!`. Milliseconds per push. Not `make check` — a slow hook
+  trains `--no-verify`.
 
 - **Tag milestone completions** — `git tag v0.1-milestone1`. Gives a stable reference for "the
   language as specified in v1."
@@ -372,12 +413,15 @@ git commit                    # editor; see Format above
 
 Keep experiments (scratch files, `a.out`) outside the repository.
 
-### 4. Clean up
+### 4. Clean up and push — before every push
 
 ```
 git status                    # must be clean
-git rebase -i --exec "make check" main
+git rebase -i --exec "make check" @{upstream}   # first push: main instead of @{upstream}
+git push                      # first push: git push -u origin <branch>
 ```
+
+Only unpushed commits are rewritten; anything already on GitHub is final (Rule 4).
 
 In the todo list: reorder, `squash` or `fixup` the noise into logical commits, and **delete any
 `exec` line that would land inside a squash group** — it would check a half-finished state.
@@ -398,6 +442,9 @@ or `git rebase --abort` to put everything back as it was.
 
 ### 5. Review
 
+Write `docs/review/<milestone>/<branch>/rNNN.md` and file its issues (`docs/review/README.md`). Fixes go
+through steps 3 and 4 again.
+
 ```
 git log --oneline main..<branch>    # two dots: commits not on main
 git diff --stat main...<branch>     # three dots: net change since branching
@@ -405,8 +452,7 @@ git diff main...<branch>
 ```
 
 Three dots compares against the shared ancestor, so `main`'s own new commits are not shown as
-removals. Anything found sends you back to step 4 — review follows the rebase, because the rebase
-can change code.
+removals.
 
 ### 6. Merge
 
@@ -417,7 +463,7 @@ git pull --ff-only                  # never a rebasing pull
 git merge --no-ff <branch>          # editor: <branch>: <subject>, body, Refs:
 ```
 
-`--ff-only` refuses rather than rebasing, which would flatten an unpushed merge commit. `--no-ff`
+`--ff-only` refuses rather than rebasing, which would flatten a merge commit not yet pushed. `--no-ff`
 forces the merge commit that a fast-forward would skip.
 
 ### 7. Verify, push, delete
@@ -427,6 +473,9 @@ git log --first-parent --oneline -3 # one new line: the merge
 git log --graph --oneline -6        # the stage as a side line rejoining main
 git push
 git status                          # up to date with 'origin/main'
+gh issue view <N>                   # each Closes: issue shows closed, not referenced
+git push origin --delete <branch>
+git fetch --prune
 git branch -d <branch>              # lowercase -d, always
 ```
 
