@@ -7,28 +7,34 @@
 
 ## Current
 
-**Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
+**Milestone:** 1 single `main`, three scalar types, arithmetic, `@print` — to be descoped (see
+Next up)
 
-**Working on:** `m1/cli-args` — `main` takes one source path, plus the first test driver. Five
-commits planned (`krama-notes-15` §4), plus one unplanned docs commit for D-038, which came out of
-the work rather than ahead of it
+**Working on:** Closing `m1/cli-args`, cut short. `main` takes one source path and exits with an
+owned class (D-035, D-038); the harness's parts 1–2 are in — pre-checks, parsing `exit_codes.h`
+(D-039), manifest validation — reviewed as r001 (#16–#20, closed). Fixtures, the runner and
+Makefile part B move to a later branch, because the fixtures depend on a syntax that does not exist
+yet
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
-`-fsanitize=address,undefined -fno-sanitize-recover=undefined`
+`-fsanitize=address,undefined -fno-sanitize-recover=undefined`. The harness is not in the gate
 
-**Next up:** Finish `m1/cli-args`. Then `m1/fatal-cleanup`, a small branch settling what the fatal
-family is: rename `FATAL_*` to `KRM_FATAL_*`, fix the macro-prefix convention once (header guards
-included — `KRAMA_EXIT_CODES_H` is currently a third spelling), and make the arena's allocation
-failure exit `OOM` rather than `INTERNAL`, since `fatal()` currently derives its status from *how*
-to die rather than *why*. Reserve `KRM_ERR_PATH_EXIT` / `_GOTO` for the diagnostic family while
-there. It lands before the lexer, which is the first heavy user of both families.
+**Next up:** Merge `m1/cli-args` with `--no-ff` — the last merge under D-030. No rewrite before it:
+#16–#21 reference these commits, so the per-commit check is `git rebase --exec "make check" main`
+with hashes confirmed unchanged.
 
-Then the lexer stage — which carries the diagnostic sink (D-033), stop-at-first-error (D-034) and
-the `.expected` dump format, and must reconcile with spec §3 first (`krama-notes-11` §8). Arena
-initialization and AST node definitions follow the lexer, not precede it: the AST's input is the
-token, so it cannot be designed before one exists.
+Then, branch order decided after the merge:
+
+- **The M1 descope and workflow 2.0** — the arena cull, the `story/` layout, spec v2 with the new
+  syntax, and an entry superseding D-030 (pushed branches, the review process). Settle when `Refs:`
+  trailers go in, and whether reviewed commits may be rewritten, before the first merge under it.
+- **The harness remainder** — `tests/stage/args/` with its six cases written in the new syntax, the
+  runner (`krama-notes-20` Appendix A.3), and Makefile part B wiring the harness into `check`.
+- **`m1/ground-up`** — renumbered: its entries become D-041 and D-042, STYLE.md 1.7.
+- **`m1/fatal-cleanup`** — the `KRM_FATAL_*` rename and the macro-prefix convention. Its arena-OOM
+  item goes with the cull.
 
 **Deliberately incomplete** —
 
@@ -44,6 +50,11 @@ token, so it cannot be designed before one exists.
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
 | Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
 | `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
+| `src/main.c` — argument contract | **Untested.** The harness validates manifests but has no runner, no fixtures, and is not in `make check`; commit 4's one-commit window stays open | The harness-remainder branch, after the descope. The fixtures need the new syntax |
+| `tests/harness/kramat.py` — header parser | Light: no enum scoping, no rejection of unknown lines inside the enum, no trailing comments. A misspelled enumerator compiles and silently shifts later values | Closed by the `--dump-exit-codes` cross-check, #21 (D-039). `exit_codes.h`'s header comment states the format rules meanwhile |
+| `tests/harness/kramat.py` — repository root | Taken as two levels above the driver file | Revisit if the layout changes (`krama-notes-19` §5.4) — the `story/` move is the likely trigger |
+| `tests/harness/kramat.py` — per-case timeout | Absent; a hanging case stalls the run | A hang is loud, not silent. Add one on the first hang (`krama-notes-19` §7) |
+| `tests/harness/kramat.py` — stdout | Unchecked under `expected = "#none"`, and `main` still dumps the file | stdout gets real coverage with `.expected` files; the dump goes with the lexer (`krama-notes-18` §7.4) |
 
 ---
 
@@ -605,6 +616,80 @@ the cheapest fix, since both increment together.
 4. **`krama-notes-12` closes with the pre-reorder milestone order** (arena init, AST nodes, sink,
    lexer). It was written in the same session as the reorder and did not pick it up. Notes are
    append-only records, so it stands — `krama-notes-11` supersedes it.
+
+---
+
+### 2026-09-25 → 2026-11-08 — `m1/cli-args` closed, cut short
+
+**Did.**
+
+1. Three builds with three object trees, and `all` folded into `check` so the gate compiles
+   `main.c`. `main` takes exactly one path and exits with an owned class from `src/exit_codes.h`
+   (D-035, with `INTERNAL` added); a directory is detected with `fstat` + `S_ISREG`, which made the
+   transpiler POSIX.1-2008 (D-038).
+2. Designed the harness on paper first: the case manifest (`krama-notes-18` — `[[case]]`, five
+   required keys, full exit names, stderr checked both ways, `#derive` / `#none` / a path), the
+   driver's shape and three error levels (`-19`), and parts 1–2 as pseudocode (`-20`).
+3. Wrote `tests/harness/kramat.py` parts 1–2 and ran the first review as a file: r001, filed as
+   #16–#20 through `gh` by Claude Code, fixed and closed. The dump cross-check is #21.
+4. Recorded D-039 (the harness parses `exit_codes.h`; the light parser and its rules) and D-040
+   (Python 3.13). STYLE.md 1.6 gains a Python row: ruff, author-side, outside the gate.
+5. Removed the scratch `tests/krama_src/test.krm`; fixtures live under `tests/stage/` (D-036).
+   Cut the branch short: fixtures, the runner and Makefile part B wait for the new syntax.
+
+**Worked.**
+
+1. **"Where does it become apparent?"** sorted every validation rule in one question: what the TOML
+   contract can check alone is a manifest error, anything needing another file is a case error.
+2. **Predict, then run.** Predicting `parse_c_int`'s output for six inputs before running them
+   exposed the reversed digit order — and showed `"0b101"` passing by being a palindrome.
+3. **Review as a file of numbered findings.** Each finding kept its number through the issue, the
+   fix and the closing, so nothing was lost between rounds.
+4. **Straight and narrow, applied repeatedly.** The timeout, the hardened header parser, the dump
+   cross-check and the fixtures were each deferred with a named trigger instead of built ahead of
+   need.
+
+**Didn't.**
+
+1. **A hand-kept exit-code map, X-macros, and program-side metadata** — D-039. Also **a hardened
+   header parser** ahead of the `--dump-exit-codes` cross-check.
+2. **Rewriting `args` into absolute paths.** kramac runs in the stage directory instead, so the
+   manifest is the command line (`krama-notes-19` §5.6).
+3. **Python 3.11 or 3.12** — D-040. 3.12 is the technical minimum and was never run.
+4. **`#skip` / `#ignore`** for `expected`: they imply a file exists and is being disregarded.
+5. **A per-case timeout** — nothing has hung yet, and a hang is loud.
+6. **Finishing the fixtures on this branch.** They would be written in a syntax about to be replaced.
+
+**Friction.**
+
+1. **Regex** — a character class taken for a group twice, `+` read as a quantifier inside a class,
+   no end anchor so partial matches passed, a quantifier that demanded two digit runs. Classed as a
+   concept with a fluency target of 5–6 (`krama-notes-20` §6); the ledger row lands with
+   `m1/ground-up`. The parser was parked on prefix-and-split for now.
+2. **The fix round broke `parse_c_int` again**: splitting characters into ranges rejected every
+   `9`. The self-check only ever saw `0` and `2`, and the issue's own test table had no `9`.
+3. **A runtime version check cannot catch a syntax error.** The PEP 701 f-strings fail compilation
+   on old Pythons before the check runs; and the check itself compared versions as strings.
+4. **A comprehension's `if` sees the raw element.** Stripping in the expression did not apply to the
+   filter, so indented comments mentioning a class were parsed as enumerators (r001 2.5).
+5. **The reviewed code was never committed**, so r001's "before" state is not in git. This is the
+   strongest argument for workflow 2.0's commit-before-review rule (`krama-notes-21` §6).
+6. **Claude reviewed without loading the project context** at the start of the manifest session and
+   asked questions the notes had already answered. Same failure as the 2026-09-21 entry.
+
+**Stubbed.** Five new rows in *Deliberately incomplete*: `main`'s argument contract is untested;
+the header parser is light (#21); the root is two levels above the driver; no per-case timeout;
+stdout is unchecked under `#none` and `main` still dumps the file.
+
+**Next.**
+
+1. Merge with `--no-ff`, without rewriting — the last merge under D-030.
+2. Descope and workflow 2.0, the harness remainder, `m1/ground-up` (D-041/D-042, STYLE.md 1.7) and
+   `m1/fatal-cleanup`; order decided after the merge.
+
+**Note for next session.** Settle when `Refs:` trailers go in, and whether reviewed commits may be
+rewritten, before the first merge under workflow 2.0: D-030's `rebase -i` and the review links
+contradict each other. The alignment exercise is still untouched.
 
 ---
 
