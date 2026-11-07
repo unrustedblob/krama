@@ -10,29 +10,30 @@
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print` — to be descoped (see
 Next up)
 
-**Working on:** Closing `m1/cli-args`, cut short. `main` takes one source path and exits with an
-owned class (D-035, D-038); the harness's parts 1–2 are in — pre-checks, parsing `exit_codes.h`
-(D-039), manifest validation — reviewed as r001 (#16–#20, closed). Fixtures, the runner and
-Makefile part B move to a later branch, because the fixtures depend on a syntax that does not exist
-yet
+**Working on:** `m1/workflow-2` — the first branch under D-041, which supersedes D-030: stage
+branches are pushed and pushed history is final; cleanup moves to a push gate
+(`rebase -i --exec "make check" @{upstream}`); reviews live in `docs/review/` and are filed as
+issues titled `<branch>-rNNN · <group>: <summary>`; one `Closes:` line per issue. Records:
+DECISIONS.md (D-041, the `DR-OWED` convention), COMMITS.md, CLAUDE.md 1.1, `krama-notes-22`.
+`m1/cli-args` is merged — the last merge under D-030
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`. The harness is not in the gate
 
-**Next up:** Merge `m1/cli-args` with `--no-ff` — the last merge under D-030. No rewrite before it:
-#16–#21 reference these commits, so the per-commit check is `git rebase --exec "make check" main`
-with hashes confirmed unchanged.
+**Next up:** Finish `m1/workflow-2` under its own rules — commit, push from the first logical commit,
+merge with `--no-ff`, delete the remote branch. Confirm r001's #17–#20 are closed: the fix commit's
+comma-listed `Closes:` closed only #16 (`aside-notes-06`).
 
 Then, branch order decided after the merge:
 
-- **The M1 descope and workflow 2.0** — the arena cull, the `story/` layout, spec v2 with the new
-  syntax, and an entry superseding D-030 (pushed branches, the review process). Settle when `Refs:`
-  trailers go in, and whether reviewed commits may be rewritten, before the first merge under it.
+- **The M1 descope** — the arena cull, the `story/` layout, spec v2 with the new syntax
+  (DR-OWED-A02-01 … -06, `aside-notes-02`, `aside-notes-04`).
 - **The harness remainder** — `tests/stage/args/` with its six cases written in the new syntax, the
   runner (`krama-notes-20` Appendix A.3), and Makefile part B wiring the harness into `check`.
-- **`m1/ground-up`** — renumbered: its entries become D-041 and D-042, STYLE.md 1.7.
+- **`m1/ground-up`** — DR-OWED-A01-01 and -02 (`aside-notes-01`), numbered when they land; STYLE.md's
+  version likewise.
 - **`m1/fatal-cleanup`** — the `KRM_FATAL_*` rename and the macro-prefix convention. Its arena-OOM
   item goes with the cull.
 
