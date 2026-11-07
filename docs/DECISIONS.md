@@ -44,7 +44,7 @@ place.
 | D-027 | Block header and buffer are separate allocations | Decided | ## |
 | D-028 | Pointer cursor with a `size_t` companion, not an offset | Decided | ## |
 | D-029 | Zero-size allocation requests abort | Decided | ## |
-| D-030 | Short-lived local branches, merged with `--no-ff` | Decided | ## |
+| D-030 | Short-lived local branches, merged with `--no-ff` | Superseded by D-041 | ## |
 | D-031 | Commit scope is optional; issue numbers go in trailers only | Decided | ## |
 | D-032 | The language is named Krama; `.krm`, `kramac` | Decided | ## |
 | D-033 | Diagnostic sink is settled inside the lexer stage, not before it | Decided | 11 |
@@ -55,6 +55,7 @@ place.
 | D-038 | Transpiler targets POSIX.1-2008; emitted runtime stays ISO C | Decided | 16 |
 | D-039 | The harness parses `exit_codes.h` for its exit-code map | Decided | 18 |
 | D-040 | The test driver's minimum Python is 3.13 | Decided | 21 |
+| D-041 | Stage branches are pushed; pushed history is final; reviews are tracked as issues | Decided | 22 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -664,7 +665,7 @@ propagated).
 
 ### D-030 — Short-lived local branches, merged with `--no-ff`
 
-**Status:** Decided · **Session:** ## · **Spec:** n/a (process) — detailed in COMMITS.md
+**Status:** Superseded by D-041 · **Session:** ## · **Spec:** n/a (process) — detailed in COMMITS.md
 
 **Decided.** Each stage of a milestone is developed on its own short-lived, local-only branch named
 `m<N>/<stage>`, created from an up-to-date `main`. Before merging, the branch is rewritten with
@@ -1278,6 +1279,71 @@ PEP 701.
 
 ---
 
+### D-041 — Stage branches are pushed; pushed history is final; reviews are tracked as issues
+
+**Status:** Decided · **Session:** 22 · **Spec:** n/a (process) — supersedes D-030; detailed in
+COMMITS.md
+
+**Decided.** Stage branches (`m<N>/<stage>`) are pushed to GitHub. Pushed history is final: Rule 4
+covers every pushed ref, and nothing is force-pushed. Commits are cleaned up *before* each push —
+`wip` stays local — and checked with `git rebase -i --exec "make check" @{upstream}` (`main` on a
+branch's first push). The squash at the merge gate is dropped; the `--no-ff` merge with a dense
+stage summary stays. Work is committed and pushed before review. Findings are filed as GitHub issues
+titled `<branch>-rNNN · <group>: <summary>`, from a review file at
+`docs/review/<milestone>/<branch>/rNNN.md`. The commit that fixes an issue carries `Closes: #N`, one
+line per issue. No pull requests. After merging, the remote branch is deleted.
+
+**Rejected.**
+
+- *Keeping D-030: local branches, rewritten freely before merging.* Simplest, and the rewrite gave
+  `main` curated logical commits. Rejected because review issues would link to commits that may
+  never exist on GitHub. It already cost something: r001's reviewed code was never committed, so its
+  findings' "before" state cannot be reproduced from git.
+- *Pushing, but allowing `--force-with-lease` on stage branches.* Keeps the freedom to squash at the
+  merge gate while still pushing. Rejected because every rewrite orphans the commits an issue
+  already links to: the links resolve to commits no branch holds, and each re-push leaves another
+  set of references to them.
+- *Squashing at the merge gate, or closing issues from the merge commit.* Rejected: the issue's
+  closing event should point at the commit that fixed it, not at a merge that happened later.
+- *Adding `Refs:` / `Closes:` trailers only during a cleanup rebase before merging.* Proposed to avoid
+  ghost references. Moot once pushed history is never rewritten.
+- *Pull requests.* A diff page per branch, and GitHub's automatic branch deletion. Rejected for now:
+  one contributor at a small scale, and a PR would be a second place to look beside the review file
+  and its issues.
+- *A `pre-push` hook running `make check`.* Enforces Rule 1 mechanically. Rejected: a slow hook
+  trains `--no-verify`. A hook that rejects `wip`, `fixup!` and `squash!` subjects is the cheap
+  check worth having.
+
+**Why.** Issues are the tracker, and a tracker whose links can dangle is not one. Pushing before
+review makes the reviewed state reproducible, and declaring pushed history final gives Rule 4 one
+meaning again. Moving cleanup in front of the push keeps what the rebase gave D-030 — logical
+commits on `main` — without rewriting anything an issue can see.
+
+**Consequences.**
+
+- D-030's *Revisit if* (a second contributor, or CI) did not fire; the trigger here is new — review
+  issues need something real to point at.
+- Rule 1 is enforceable only before a push. A broken commit that reaches GitHub stays in history.
+- `wip` commits are never pushed; the push gate replaces the merge gate's rewrite.
+- Closing keywords act when the fixing commit lands on the default branch. Each closed issue is
+  checked after `main` is pushed: `closed`, not `referenced`.
+- `rNNN` restarts at `r001` on each branch. A review that re-checks an earlier pass's fixes names it
+  in a `Follows` field and opens with that pass's issue status.
+- Branch deletion is by hand (`git push origin --delete`), with `git fetch --prune`. After a `--no-ff`
+  merge the branch's commits are reachable from `main`, so issue links survive.
+- Unmerged work is no longer on one machine only.
+- PROJECT.md's 2026-09-18 **Didn't** line ("pushed branches and pull requests — rejected") stands,
+  answered by a later entry.
+
+**Revisit if.** A second contributor arrives (pull requests, review on GitHub); CI is added (it may
+replace the push gate's local check); or a pushed commit genuinely must be rewritten — a committed
+secret is the realistic case, and needs an exception path written down when it first happens.
+
+**Reference.** `krama-notes-22-workflow-2`; `krama-notes-21` §6; `krama-notes-09`; D-030, D-031;
+GitHub Docs, "Linking a pull request to an issue".
+
+---
+
 ### D-0XX — [Template]
 
 **Status:** Decided · **Session:** ## · **Spec:** §#
@@ -1310,3 +1376,7 @@ components, things now unrepresentable.
   an explicit trigger — that trigger belongs here.
 - **Reference IDs from code** where a non-obvious implementation choice traces back to one:
   `/* Euclidean adjustment, see D-014 */`.
+- **Owed decisions are not numbered.** A decision reached in discussion is `DR-OWED-<source>-NN`
+  until it is written here — `<source>` is its note (`22` for `krama-notes-22`, `A01` for
+  `aside-notes-01`). IDs are assigned in the order entries land, and the source note's owed table
+  then records the ID.
