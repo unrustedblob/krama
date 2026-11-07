@@ -3,6 +3,7 @@
 **Status:** Closed for milestone 1. Implementation may begin against this document.
 **Date:** 2026-08-12
 **Supersedes:** design notes sessions 01–06 (retained as the decision record).
+**Amended:** 2026-09-23 — §11.1 (`D-037`)
 
 > This is the reference document. Where it disagrees with the session notes, this document wins.
 > Items still undecided are isolated in §13 and none of them block the AST.
@@ -499,7 +500,9 @@ from a refactor that was happening anyway.
   expected. Golden C-text comparison breaks on whitespace and formatting choices that carry no
   semantic weight.
 - **A small number of golden tests for codegen shape only.**
-- **Zero dependencies.** A `tests/` directory of `.krm` + `.expected` pairs and a shell driver.
+- **Standard library only.** A `tests/` directory of `.krm` + `.expected` pairs and a Python
+  driver (3.11 or newer, no third-party packages). Building the transpiler requires no
+  interpreter.
 - **`-fsanitize=address,undefined` as a Makefile target, from the start.**
 - **Trap tests check exit code and stderr**, both observable.
 

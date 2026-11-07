@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "exit_codes.h"
+
 [[noreturn]] void fatal(enum FatalPath action, const char *msg, ...)
 {
         va_list args;
@@ -17,5 +19,5 @@
         if (action == FATAL_PATH_ABORT) {
                 abort();
         }
-        exit(1);
+        exit(KRM_EXIT_ERR_INTERNAL);
 }

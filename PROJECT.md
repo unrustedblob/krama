@@ -7,19 +7,34 @@
 
 ## Current
 
-**Milestone:** 1 single `main`, three scalar types, arithmetic, `@print`
+**Milestone:** 1 single `main`, three scalar types, arithmetic, `@print` — to be descoped (see
+Next up)
 
-**Working on:** Nothing in flight. The branch workflow (`m1/workflow`) and the rename to Krama
-(`m1/rename`) are merged; arena iteration 1 reviewed and closed, fatal-error module in place
+**Working on:** Closing `m1/cli-args`, cut short. `main` takes one source path and exits with an
+owned class (D-035, D-038); the harness's parts 1–2 are in — pre-checks, parsing `exit_codes.h`
+(D-039), manifest validation — reviewed as r001 (#16–#20, closed). Fixtures, the runner and
+Makefile part B move to a later branch, because the fixtures depend on a syntax that does not exist
+yet
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
-`-fsanitize=address,undefined -fno-sanitize-recover=undefined`
+`-fsanitize=address,undefined -fno-sanitize-recover=undefined`. The harness is not in the gate
 
-**Next up:** Initialize the arena in `main` — first stage under the new workflow, so the first real
-branch. Then AST node definitions — which also settle the block size. Then the diagnostic sink
-(STYLE.md §13 defers it to "before the lexer"), then the lexer.
+**Next up:** Merge `m1/cli-args` with `--no-ff` — the last merge under D-030. No rewrite before it:
+#16–#21 reference these commits, so the per-commit check is `git rebase --exec "make check" main`
+with hashes confirmed unchanged.
+
+Then, branch order decided after the merge:
+
+- **The M1 descope and workflow 2.0** — the arena cull, the `story/` layout, spec v2 with the new
+  syntax, and an entry superseding D-030 (pushed branches, the review process). Settle when `Refs:`
+  trailers go in, and whether reviewed commits may be rewritten, before the first merge under it.
+- **The harness remainder** — `tests/stage/args/` with its six cases written in the new syntax, the
+  runner (`krama-notes-20` Appendix A.3), and Makefile part B wiring the harness into `check`.
+- **`m1/ground-up`** — renumbered: its entries become D-041 and D-042, STYLE.md 1.7.
+- **`m1/fatal-cleanup`** — the `KRM_FATAL_*` rename and the macro-prefix convention. Its arena-OOM
+  item goes with the cull.
 
 **Deliberately incomplete** —
 
@@ -29,14 +44,17 @@ branch. Then AST node definitions — which also settle the block size. Then the
 | `arena.c` — mark/release | Absent | Nothing in milestone 1 reclaims early; the AST lives to teardown. Additive when multi-file arrives |
 | `arena.c` — alignment | Fixed at `alignof(max_align_t)` | Per-type alignment is a later refinement, STYLE.md §9.2 |
 | `arena.c` — ASan poisoning | Absent | `ASAN_POISON_MEMORY_REGION` on block creation, unpoison per allocation. Planned follow-up, STYLE.md §9.2 |
-| `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; same conversation as STYLE.md §13's testing conventions. First concrete case is D-029 |
-| `tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
+| `tests/` — abort paths | Untested | Every `FATAL_PATH_ABORT` ends the process, which the in-process suite cannot survive. Needs a process-per-case driver; the Python driver of D-036 / D-037 is its seed. First concrete case is D-029 |
+| `tests/unit_tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
-| `Makefile` — `check` coverage | Runs the test build only; `src/main.c` is filtered out of it, so the production binary is never compiled by the gate | A break confined to `main.c` passes `check`. Fold `all` into `check` once `main.c` does more than exist |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
 | Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. Automating a workflow that has not settled tends to enforce the wrong thing; revisit once the first few merges are habitual |
-| `src/main.c` — source path | Hardcoded absolute path to a fixture, `/home/unrust/projects/krama/tests/krama_src/test.krm` | Breaks if the working copy moves — it already did once, during D-032. Goes when `main` takes a path argument, due with the arena initialization |
-| `tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
+| `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
+| `src/main.c` — argument contract | **Untested.** The harness validates manifests but has no runner, no fixtures, and is not in `make check`; commit 4's one-commit window stays open | The harness-remainder branch, after the descope. The fixtures need the new syntax |
+| `tests/harness/kramat.py` — header parser | Light: no enum scoping, no rejection of unknown lines inside the enum, no trailing comments. A misspelled enumerator compiles and silently shifts later values | Closed by the `--dump-exit-codes` cross-check, #21 (D-039). `exit_codes.h`'s header comment states the format rules meanwhile |
+| `tests/harness/kramat.py` — repository root | Taken as two levels above the driver file | Revisit if the layout changes (`krama-notes-19` §5.4) — the `story/` move is the likely trigger |
+| `tests/harness/kramat.py` — per-case timeout | Absent; a hanging case stalls the run | A hang is loud, not silent. Add one on the first hang (`krama-notes-19` §7) |
+| `tests/harness/kramat.py` — stdout | Unchecked under `expected = "#none"`, and `main` still dumps the file | stdout gets real coverage with `.expected` files; the dump goes with the lexer (`krama-notes-18` §7.4) |
 
 ---
 
@@ -470,6 +488,208 @@ path, which broke once already when the working copy was renamed.
 bump allocator over a `static` buffer, outside Krama. Session numbering is also owed — the
 `DECISIONS.md` template's `Session: ##` has never been filled in, and tying it to the note number is
 the cheapest fix, since both increment together.
+
+---
+
+### 2026-09-21 — Lexer before AST, first-iteration lexer design
+
+**Did.**
+
+1. Reordered the milestone: the lexer comes before AST node definitions, and the arena is no longer
+   tied to the next step. The test applied was "which stage has every input either built or
+   decided" — only the lexer passes, since the AST's input is the token, which does not exist yet.
+2. Settled the token buffer: one allocation of `n + 1` tokens, justified by a documented invariant
+   (every token covers at least one byte, no two share a byte, EOF is the only zero-width token) and
+   asserted on every append, per STYLE.md §9.3.
+3. Separated two tables that had been one: character classes (what the scanner reads) and token
+   kinds (what it emits). Whitespace and comments have classes and no kinds.
+4. Settled the scanner's shape: the first character picks the rule, and that rule alone decides
+   where the token ends. The "context flags" idea (`in_char_literal`) is not state — it is which
+   branch of the code is running.
+5. Queued two decisions, later recorded as **D-033** (the diagnostic sink is settled inside the
+   lexer stage, not before it) and **D-034** (stop at the first lexical error).
+
+**Worked.**
+
+1. Refusing to design the AST without its input. Reading chibicc's `struct Node` and harec's
+   `ast.h` side by side produced no decision, and the reason was structural: both are shaped by what
+   the parser needs to hold, and the parser does not exist. That was evidence the order was wrong,
+   not that the reading had failed.
+2. Tracing a concrete bad input through the whole pipeline. `let x$y: i32 = 1;` showed that the
+   parser only asks whether an identifier makes sense *in position*, never whether it is one, so
+   `x$y` would reach `cc`. That settled identifier validity as the lexer's job and produced the rule:
+   each phase rejects what it is the first able to see.
+3. Deriving the bound properly rather than from an example. `x+1` shows `n` tokens are *reachable*;
+   the *ceiling* needs the two invariants. The distinction is what makes the comment at the buffer
+   worth writing.
+
+**Didn't.**
+
+1. **`n / 2 + 1` as the token bound** — the first guess, assuming every token is followed by a
+   separator. `x+1` is three tokens in three bytes and the bound gives two, so the third append
+   overflows.
+2. **"A separator is a character."** A token ends wherever the next character cannot continue it;
+   `x` ends at `+` because `+` cannot be part of an identifier, not because `+` separates.
+3. **Recording errors and continuing**, for now — D-034. It is the better behaviour and it is
+   cheap in the lexer specifically, but nothing yet needs two errors from one run.
+4. **A milestone-plus-counter branch scheme** (`m1/lex:1/…`). `:` is illegal in a Git ref name, and
+   the merge commits on `main` already record order.
+
+**Friction.**
+
+1. **Claude stated twice that `krama-spec-v1.md` was not in the project files.** It was. The whole
+   first-draft design was worked out without consulting §3, which meant `#` (comments) and `@`
+   (builtins) were missing from the character table, `<`, `>`, `&`, `|`, `^`, `!`, `[`, `]` and `"`
+   were included despite not being in milestone 1, and maximal munch and keyword post-filtering were
+   treated as deferrable when §3.3 already requires them. Reconciled in `krama-notes-11` §8 — read
+   that section before writing the lexer.
+2. **A guessed bound looks like a proof.** `n / 2 + 1` reads as reasoning and is not; it survived
+   until a three-byte example was tried against it. Any fixed-capacity buffer now gets the
+   adversarial input written down next to the invariant.
+3. **`STYLE.md` §13's trigger contradicted its own premise.** The section says conventions are
+   settled when the work reaches them, yet the sink row said "before the lexer" — a guess about when
+   the need would arrive, made before any error existed to report. D-033 moves it.
+
+---
+
+### 2026-09-23 — Test harness, argument contract, corpus layout, commit plan
+
+**Did.**
+
+1. Studied Nora Sandler's test suite and settled what Krama keeps (corpus layout, per-stage runs,
+   accept/reject by exit status) and what it changes (content comparison at stage boundaries, rather
+   than treating the compiler as a black box).
+2. Scoped the branch now open as `m1/cli-args`: `main` takes exactly one argument, a file path.
+   Reframed what is testable — the **argument contract**, not the dump, since the dump does not
+   survive the lexer while the argument contract outlives every mode.
+3. Settled exit codes (**D-035**): a small owned enum, `KRM_` prefix, success `0`, remaining classes
+   from `2`, `1` left unused.
+4. Settled the corpus (**D-036**) and the driver (**D-037**): one TOML manifest per stage,
+   invocation explicit per case, expected dumps as sibling files, symbolic exit names, a Python
+   driver using the standard library only. The last of these amends spec §11.1 — the first change to
+   the spec since it closed.
+5. Fixed the branch's commit plan: docs, unit-test moves, Makefile part A, exit-code header and
+   `main`, then driver and fixtures. Added a `cli` scope to COMMITS.md, and tied `DECISIONS.md`'s
+   `Session` field to the note number, which the 2026-09-19 entry had flagged as owed.
+
+**Worked.**
+
+1. Separating inputs from results. The first manifest sketch had `Actual` and `Pass/Fail` columns —
+   a committed file the driver would rewrite on every run, dirtying the tree. Inputs only; results go
+   to stdout.
+2. Noticing that three of the six cases have no input file at all. "No argument", "two arguments"
+   and "a directory as the argument" are defined entirely by their invocation, which is why a
+   pairs-on-disk layout could not hold them and a manifest could.
+3. Reading what `PROJECT.md`'s row actually asked. "Fold `all` into `check`" asks for **compilation**
+   coverage — `main.c` is filtered out of the test build, so nothing compiles it — not for the
+   production binary to be *run*. That dissolved an apparent need to invent something for the gate to
+   invoke.
+4. Checking the commit order against COMMITS.md Rule 1 before writing anything. The first plan put
+   the driver before `main`, which would have failed `rebase --exec "make check"` at the merge gate.
+
+**Didn't.**
+
+1. **A `.expected` that duplicates the input.** With `main` dumping the file verbatim, the expected
+   output *is* the input — two files kept in sync by hand, both dead when the lexer lands.
+2. **Keeping a permanent dump mode** so the roundtrip stays testable. A flag whose only user is one
+   test, proving something every lexer case proves implicitly.
+3. **`--version` as the thing the gate runs.** Proves almost nothing and contradicts the
+   one-argument contract just decided.
+4. **`errno` values and `sysexits.h` as exit statuses** — D-035. Also **CSV** (quoting rules no
+   shell can parse), **directory-inferred invocation** (renaming a folder would change what the tests
+   do), and **a shell driver** (spec §11.1's original wording, amended by D-037).
+5. **Collapsing commits 4 and 5** to remove the one-commit window where `main`'s new behaviour has
+   no harness. The diff would be large and there would be nowhere to state the gap.
+
+**Friction.**
+
+1. **Exit code `1` is already taken.** A sanitized build exits `1` when ASan or UBSan fires
+   (notes-09 §9.1). Had `1` also meant "rejected the input as designed", the harness could not have
+   distinguished a correct rejection from a sanitizer catch, and the sanitized pass would have
+   stopped being a check without anything failing. Found late, while numbering the enum.
+2. **The catch-22 was only half seen.** "I cannot test `main` without the driver" is true; so is
+   "the driver cannot be tested without `main`". Something has to be first, and the question is which
+   untested window to accept — not how to avoid one.
+3. **Two builds, one filename.** A sanitized `kramac` and a production `kramac` writing to the same
+   path means the last build wins and the harness may silently run the wrong binary. Distinct output
+   paths, and `clean` has to know about both.
+4. **`krama-notes-12` closes with the pre-reorder milestone order** (arena init, AST nodes, sink,
+   lexer). It was written in the same session as the reorder and did not pick it up. Notes are
+   append-only records, so it stands — `krama-notes-11` supersedes it.
+
+---
+
+### 2026-09-25 → 2026-11-08 — `m1/cli-args` closed, cut short
+
+**Did.**
+
+1. Three builds with three object trees, and `all` folded into `check` so the gate compiles
+   `main.c`. `main` takes exactly one path and exits with an owned class from `src/exit_codes.h`
+   (D-035, with `INTERNAL` added); a directory is detected with `fstat` + `S_ISREG`, which made the
+   transpiler POSIX.1-2008 (D-038).
+2. Designed the harness on paper first: the case manifest (`krama-notes-18` — `[[case]]`, five
+   required keys, full exit names, stderr checked both ways, `#derive` / `#none` / a path), the
+   driver's shape and three error levels (`-19`), and parts 1–2 as pseudocode (`-20`).
+3. Wrote `tests/harness/kramat.py` parts 1–2 and ran the first review as a file: r001, filed as
+   #16–#20 through `gh` by Claude Code, fixed and closed. The dump cross-check is #21.
+4. Recorded D-039 (the harness parses `exit_codes.h`; the light parser and its rules) and D-040
+   (Python 3.13). STYLE.md 1.6 gains a Python row: ruff, author-side, outside the gate.
+5. Removed the scratch `tests/krama_src/test.krm`; fixtures live under `tests/stage/` (D-036).
+   Cut the branch short: fixtures, the runner and Makefile part B wait for the new syntax.
+
+**Worked.**
+
+1. **"Where does it become apparent?"** sorted every validation rule in one question: what the TOML
+   contract can check alone is a manifest error, anything needing another file is a case error.
+2. **Predict, then run.** Predicting `parse_c_int`'s output for six inputs before running them
+   exposed the reversed digit order — and showed `"0b101"` passing by being a palindrome.
+3. **Review as a file of numbered findings.** Each finding kept its number through the issue, the
+   fix and the closing, so nothing was lost between rounds.
+4. **Straight and narrow, applied repeatedly.** The timeout, the hardened header parser, the dump
+   cross-check and the fixtures were each deferred with a named trigger instead of built ahead of
+   need.
+
+**Didn't.**
+
+1. **A hand-kept exit-code map, X-macros, and program-side metadata** — D-039. Also **a hardened
+   header parser** ahead of the `--dump-exit-codes` cross-check.
+2. **Rewriting `args` into absolute paths.** kramac runs in the stage directory instead, so the
+   manifest is the command line (`krama-notes-19` §5.6).
+3. **Python 3.11 or 3.12** — D-040. 3.12 is the technical minimum and was never run.
+4. **`#skip` / `#ignore`** for `expected`: they imply a file exists and is being disregarded.
+5. **A per-case timeout** — nothing has hung yet, and a hang is loud.
+6. **Finishing the fixtures on this branch.** They would be written in a syntax about to be replaced.
+
+**Friction.**
+
+1. **Regex** — a character class taken for a group twice, `+` read as a quantifier inside a class,
+   no end anchor so partial matches passed, a quantifier that demanded two digit runs. Classed as a
+   concept with a fluency target of 5–6 (`krama-notes-20` §6); the ledger row lands with
+   `m1/ground-up`. The parser was parked on prefix-and-split for now.
+2. **The fix round broke `parse_c_int` again**: splitting characters into ranges rejected every
+   `9`. The self-check only ever saw `0` and `2`, and the issue's own test table had no `9`.
+3. **A runtime version check cannot catch a syntax error.** The PEP 701 f-strings fail compilation
+   on old Pythons before the check runs; and the check itself compared versions as strings.
+4. **A comprehension's `if` sees the raw element.** Stripping in the expression did not apply to the
+   filter, so indented comments mentioning a class were parsed as enumerators (r001 2.5).
+5. **The reviewed code was never committed**, so r001's "before" state is not in git. This is the
+   strongest argument for workflow 2.0's commit-before-review rule (`krama-notes-21` §6).
+6. **Claude reviewed without loading the project context** at the start of the manifest session and
+   asked questions the notes had already answered. Same failure as the 2026-09-21 entry.
+
+**Stubbed.** Five new rows in *Deliberately incomplete*: `main`'s argument contract is untested;
+the header parser is light (#21); the root is two levels above the driver; no per-case timeout;
+stdout is unchecked under `#none` and `main` still dumps the file.
+
+**Next.**
+
+1. Merge with `--no-ff`, without rewriting — the last merge under D-030.
+2. Descope and workflow 2.0, the harness remainder, `m1/ground-up` (D-041/D-042, STYLE.md 1.7) and
+   `m1/fatal-cleanup`; order decided after the merge.
+
+**Note for next session.** Settle when `Refs:` trailers go in, and whether reviewed commits may be
+rewritten, before the first merge under workflow 2.0: D-030's `rebase -i` and the review links
+contradict each other. The alignment exercise is still untouched.
 
 ---
 
