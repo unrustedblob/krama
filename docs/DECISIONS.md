@@ -54,6 +54,7 @@ place.
 | D-037 | Test driver is Python, standard library only | Decided | 14 |
 | D-038 | Transpiler targets POSIX.1-2008; emitted runtime stays ISO C | Decided | 16 |
 | D-039 | The harness parses `exit_codes.h` for its exit-code map | Decided | 18 |
+| D-040 | The test driver's minimum Python is 3.13 | Decided | 21 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -1235,6 +1236,47 @@ cross-check itself.
 
 **Reference.** `krama-notes-18-case-manifest` §4–§5; `krama-notes-19-driver-shape` §8;
 `krama-notes-20-driver-pseudocode` §3–§5; `krama-notes-21-review-r001` §3; issue #21; D-035.
+
+---
+
+### D-040 — The test driver's minimum Python is 3.13
+
+**Status:** Decided · **Session:** 21 · **Spec:** §11.1 — supersedes D-037's version floor
+
+**Decided.** The test driver requires **Python 3.13**, the version it is written and tested on. It
+compares `sys.version_info` against `(3, 13)` at start, before importing `tomllib`. Everything else
+in D-037 stands: Python, standard library only, invoked as `python3`, never needed to build `kramac`.
+
+**Rejected.**
+
+- *Keeping 3.11.* D-037's floor, and the oldest supported Python as of late 2026. Rejected because
+  the driver uses backslashes inside f-string expressions, which are a SyntaxError before 3.12
+  (PEP 701). Keeping 3.11 would mean rewriting working code for a version nobody runs.
+- *3.12.* The technical minimum for PEP 701. Rejected because it is never run: declaring it would
+  claim support for a version no test has exercised.
+
+**Why.** A version floor is a claim, and the only claim that can be backed is the version actually
+tested. With one developer on one machine, that is 3.13 (Debian 13's default). Distribution defaults
+run one to three versions behind the latest release (3.15, October 2026); 3.13 leaves out only
+Ubuntu 24.04's default 3.12 among common ones.
+
+**Consequences.**
+
+- **D-037's 3.11 floor no longer holds;** the rest of D-037 is unchanged.
+- The version check fires only on 3.12. Anything older fails at compile time on the f-strings,
+  before the check can run; a comment beside the check says so.
+- The version is compared numerically. Comparing version strings is wrong: `"3.9.1" < "3.11"` is
+  `False`.
+- STYLE.md §13’s Python row states 3.13. Spec v1 §11.1 still says 3.11 and is updated with the M1 descope,
+  when spec v2 lands; until then, this entry governs.
+
+**Revisit if.** A second machine or CI runs an older Python, or the driver starts depending on a
+newer feature, in which case raising the floor is a new entry.
+
+**Reference.** `krama-notes-21-review-r001` §2; D-037; `krama-notes-14-corpus-layout` §4.3;
+PEP 701.
+
+---
 
 ### D-0XX — [Template]
 

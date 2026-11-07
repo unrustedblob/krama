@@ -1,11 +1,14 @@
 # Krama — C Coding Standards
 
-**Version:** 1.5 · **Date:** 2026-09-23
+**Version:** 1.6 · **Date:** 2026-11-08
 **Status:** Final for milestone 1. Amend by addition when a rule is actually needed.
 **Target standard:** C23 (`-std=c23`, pinned)
 
 Rules only. Rationale for individual decisions lives in `DECISIONS.md`; language rules live in
 `krama-spec-v1.md`.
+
+These rules govern the C in this repository. Python, used only for test and doc tooling, is covered
+by its own row in §13 and nowhere else.
 
 Sections marked **TBD** are not yet decided — do not invent a convention for them, raise it instead.
 
@@ -791,6 +794,7 @@ Raise these rather than inventing a convention on the spot.
 | The assertion mechanism — `assert` compiles away under `NDEBUG`, which would remove internal invariant checks from release builds | Same conversation as the above; they are two halves of "how does this program report that something is wrong" (`D-033`). |
 | The dump format — what one line of a token or AST dump contains, and its field order | Once the lexer produces output worth testing. Corpus layout and the driver contract are settled (`D-036`, `D-037`); the format the `.expected` files hold is not. |
 | Build tooling — target chains, format gates, hooks, doc scripts | Phase 2. |
+| Python conventions — the test driver (`tests/harness/kramat.py`) and `tools/` scripts | **Settled so far:** Python 3.13 (`D-040`), standard library only (`D-037`), invoked as `python3`. Module names are short and lowercase (PEP 8), never `test_*.py` or `*_test.py`, which pytest collects. Formatted and linted with ruff at its default settings, run by the author. **Not part of `make check`:** the gate checks the C of kramac; the harness's correctness is in the gate because `make check` runs it, its style is not. **Revisit** if ruff's defaults change the formatting, or if Python formatting is ever wanted in the gate. |
 
 Anything else that arises is an addition to this document, not a gap in it.
 
