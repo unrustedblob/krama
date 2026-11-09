@@ -2,7 +2,7 @@
 
 Covers commit messages, branches, pushing and merging, and the git side of reviews. The reasoning behind the branch,
 push and merge workflow is `D-041` (superseding `D-030`); the reasoning behind optional scopes and
-issue trailers is `D-031`.
+issue trailers is `D-031`; the `learn` type and learning branches come from `D-042`.
 
 ---
 
@@ -68,10 +68,11 @@ Refs: D-014
 | `fix` | Corrects wrong behavior |
 | `refactor` | Restructures without changing behavior |
 | `test` | Adds or changes tests only |
-| `docs` | Spec, README, PROJECT.md, DECISIONS.md, comments |
+| `docs` | Spec, README, PROJECT.md, DECISIONS.md, CLAUDE.md, comments |
 | `build` | Makefile, compiler flags, hooks, tooling |
 | `perf` | Measured performance change — not speculative |
 | `chore` | Housekeeping with no source effect (.gitignore, file moves) |
+| `learn` | Work under `learn/` — packets, exercises, summaries, ledger rows |
 
 `refactor` means behavior is unchanged and tests are untouched. If tests changed, it is `feat` or
 `fix`.
@@ -105,6 +106,10 @@ commit should be split.
 No `build` scope: the `build` type already says where. `test(test)` is redundant for the same
 reason — write `test: ...` for a change to the test driver itself, and `test(rt): ...` for tests of
 another phase.
+
+`learn` never takes a scope, for the same reason as `build`: the type already says where. Topics are
+folders, not scopes — the branch name already carries the topic and packet. A change to CLAUDE.md
+§8 or D-042 is `docs`, not `learn`; only material inside `learn/` is.
 
 ---
 
@@ -157,7 +162,8 @@ m<N>/<stage>
 ### Lifecycle
 
 - **Short-lived: one branch per stage.** Created from an up-to-date `main`, merged, deleted. The next
-  stage branches from the updated `main`. No long-lived `dev` or `milestone-N` branch.
+  stage branches from the updated `main`. No long-lived `dev` or `milestone-N` branch. Learning
+  branches are the exception — see *Learning branches*.
 - **Pushed. Pushed history is final.** Branches are pushed so that review issues link to commits that
   exist. Once pushed, a commit is never rewritten (Rule 4). Clean up before pushing — see *Pushing*.
 - **Branch from a fresh `main`.** Pull first. A stale local `main` reintroduces the long-lived-branch
@@ -167,6 +173,28 @@ m<N>/<stage>
   `git push origin --delete <branch>`, then `git fetch --prune`. After a `--no-ff` merge the branch
   tip is reachable from `main`, so `-d` succeeds and issue links still resolve. If `-d` refuses, the
   branch is *not* merged — investigate rather than reaching for `-D`.
+
+### Learning branches
+
+```
+learn/<topic>/<packet>
+```
+
+- **One branch per packet**, named after its folder: `learn/git/remote-tracking` holds
+  `learn/git/remote-tracking/`. The `/ground-up` track belongs to no milestone, so the name carries
+  none (D-042).
+- **The one exception to short-lived branches.** A packet may stay open across any number of stage
+  branches, and a paused packet's branch stays pushed. It touches only `learn/`, so it never needs
+  `main` merged into it.
+- **Cut from an up-to-date `main`**, like any branch. Pushing, the push gate and Rule 4 apply as
+  written.
+- **Merged with `--no-ff`** when the packet reaches a final status — `cleared` or
+  `closed-by-evidence` — with the subject `learn/<topic>/<packet>: <subject>`. A packet the
+  programmer abandons is merged too, with its ledger row saying so, because the record is never
+  erased (CLAUDE.md §8.3).
+- **Never name a branch `learn` or `learn/<topic>`.** Git stores refs as paths, so a branch
+  `learn/git` cannot coexist with `learn/git/remote-tracking`.
+- **Stage work never goes on a learning branch**, and a packet never goes on a stage branch.
 
 ---
 
@@ -348,14 +376,16 @@ refactor(parse): extract operand loop from additive and multiplicative
 -->
 
 - **`commit-msg` hook** validating the format. A shell script reading `$1` and matching the subject
-  line against two patterns:
+  line against three patterns:
   - ordinary commits — type mandatory, scope optional:
-    `^(feat|fix|refactor|test|docs|build|perf|chore)(\([a-z]+(,[a-z]+)?\))?: .+$`
+    `^(feat|fix|refactor|test|docs|build|perf|chore|learn)(\([a-z]+(,[a-z]+)?\))?: .+$`
   - merge commits — branch-name label:
     `^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .+$`
+  - learning merge commits:
+    `^learn/[a-z0-9-]+/[a-z0-9-]+: .+$`
 
   Length checked separately against the 50/72 limits. Roughly twenty lines, and a legitimate aim-2
-  exercise. Without the second pattern the hook rejects every merge.
+  exercise. Without the merge patterns the hook rejects every merge.
 
 - **`pre-commit` hook: keep it fast.** Build and format check only. Once a hook takes fifteen
   seconds, `--no-verify` becomes reflex and the enforcement is theatre.
