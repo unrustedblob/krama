@@ -10,35 +10,38 @@
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print` — to be descoped (see
 Next up)
 
-**Working on:** `m1/workflow-2` — the first branch under D-041, which supersedes D-030: stage
-branches are pushed and pushed history is final; cleanup moves to a push gate
-(`rebase -i --exec "make check" @{upstream}`); reviews live in `docs/review/` and are filed as
-issues titled `<branch>-rNNN · <group>: <summary>`, with findings stated as failing inputs and
-follow-up passes rerunning them with fresh outliers; one `Closes:` line per issue. Records:
-DECISIONS.md (D-041, the `DR-OWED` convention), COMMITS.md, `docs/review/README.md`,
-`krama-notes-22`. `m1/cli-args` is merged — the last merge under D-030
+**Working on:** `ground-up` — the `/ground-up` learning track lands. D-042: a track parallel to the
+milestones, assessed on an anchored scale, living under `learn/<topic>/<packet>/` with the ledger at
+`learn/README.md`, each packet on its own branch. D-043: CLAUDE.md is tracked, committed at 1.1 and
+then 1.2 so the rule change is a diff. COMMITS.md gains the `learn` type and learning branches;
+STYLE.md goes to 1.7. D-041's body is brought in line with the review rules. `m1/workflow-2` is
+merged — the first merge under D-041
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`. The harness is not in the gate
 
-**Next up:** Finish `m1/workflow-2` under its own rules — commit, push from the first logical commit,
-merge with `--no-ff`, delete the remote branch. Confirm r001's #17–#20 are closed: the fix commit's
-comma-listed `Closes:` closed only #16 (`aside-notes-06`).
+**Next up:** Merge `ground-up` with `--no-ff`, check the D-041 issue shows `closed`, delete the
+remote branch. Confirm r001's #17–#20 are closed: the fix commit's comma-listed `Closes:` closed
+only #16 (`aside-notes-06`).
 
-**Paused detour:** `remote-tracking` (score 5) — the lab in `learning/remote-tracking/packet.md`,
+**Paused packet:** `git/remote-tracking` (score 5) — the lab in `learn/git/remote-tracking/README.md`,
 accepted 2026-10-21 and put on hold 2026-10-23. Nothing waits on it now that D-041 answered Rule 4's
-scope; it conflicts with `portability-layers` under the one-active-detour rule (CLAUDE.md §8.7).
+scope; it conflicts with `portability/portability-layers` (open) under the one-active-packet limit
+(CLAUDE.md §8.7). Its branch is cut only after `ground-up` merges. The rest of the track is in
+`learn/README.md`.
 
 Then, branch order decided after the merge:
 
+- **The git hooks — first, on `tool/commit-hook`.** `commit-msg` checks the subject against COMMITS.md's patterns (type
+  mandatory, the merge and learning-merge labels, the 50/72 limits); `pre-push` refuses commits whose
+  subject starts `wip`, `fixup!` or `squash!`. Pushed history is final (D-041), so a malformed
+  subject that gets pushed stays — this branch's two untyped commits are the case.
 - **The M1 descope** — the arena cull, the `story/` layout, spec v2 with the new syntax
   (DR-OWED-A02-01 … -06, `aside-notes-02`, `aside-notes-04`).
 - **The harness remainder** — `tests/stage/args/` with its six cases written in the new syntax, the
   runner (`krama-notes-20` Appendix A.3), and Makefile part B wiring the harness into `check`.
-- **`m1/ground-up`** — DR-OWED-A01-01 and -02 (`aside-notes-01`), numbered when they land; STYLE.md's
-  version likewise.
 - **`m1/fatal-cleanup`** — the `KRM_FATAL_*` rename and the macro-prefix convention. Its arena-OOM
   item goes with the cull.
 
@@ -54,8 +57,7 @@ Then, branch order decided after the merge:
 | `tests/unit_tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
-| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. The `pre-push` hook is now the one worth writing: reject pushed commits whose subject starts `wip`, `fixup!` or `squash!` (D-041), not `make check`. Revisit the others once the first few merges under D-041 are habitual |
-| `CLAUDE.md` — tracking | Undecided; the repository's copy is 1.1 without `/ground-up`, the project context's copy carries it | DR-OWED-A01-02, on `m1/ground-up`. Nothing tracked depends on it: the review rules live in `docs/review/README.md` |
+| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. `commit-msg` and `pre-push` are the next branch after `ground-up`; `pre-commit` waits until the first two are habitual |
 | `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 | `src/main.c` — argument contract | **Untested.** The harness validates manifests but has no runner, no fixtures, and is not in `make check`; commit 4's one-commit window stays open | The harness-remainder branch, after the descope. The fixtures need the new syntax |
 | `tests/harness/kramat.py` — header parser | Light: no enum scoping, no rejection of unknown lines inside the enum, no trailing comments. A misspelled enumerator compiles and silently shifts later values | Closed by the `--dump-exit-codes` cross-check, #21 (D-039). `exit_codes.h`'s header comment states the format rules meanwhile |
@@ -771,6 +773,80 @@ DR-OWED-A01-02.
 
 **Note for next session.** The `remote-tracking` detour is paused, and `portability-layers` is still
 open — the one-active-detour conflict is unresolved. The alignment exercise is still untouched.
+
+---
+
+### 2026-09-29 → 2026-11-09 — `/ground-up` lands as a parallel learning track
+
+**Did.**
+
+1. Designed `/ground-up` (`aside-notes-01`): a concept scale with stated evidence that requests a
+   packet below 7, a separate language-fluency axis that never triggers one, a guide set up front
+   and a check set held back, and sparring in C, C++, Zig, OCaml, Go and Rust.
+2. Revised it before landing: the track belongs to no milestone, each packet runs on its own branch
+   `learn/<topic>/<packet>`, and the ledger is `learn/README.md` with topic, scope and language
+   columns.
+3. Wrote **D-042** (`/ground-up`) and **D-043** (CLAUDE.md tracked) before the commits citing them.
+   CLAUDE.md was committed at 1.1, then 1.2. §2 now states that workflow help — commit messages,
+   review files, issue text, git steps — is not project code.
+4. COMMITS.md: the `learn` type and *Learning branches*. STYLE.md 1.7: `learn/` in the layout,
+   sparring C held to STYLE.md, and the CLAUDE.md row's typo fixed.
+5. Brought D-041's body in line with the review rules, through an issue.
+6. Migrated the ledger and the `remote-tracking` packet into `learn/`, added the owed regex row, and
+   set its exit at 7 like any concept.
+
+**Worked.**
+
+1. **Committing CLAUDE.md at 1.1 first.** The `/ground-up` change reads as a diff in
+   `git log -p CLAUDE.md`, which is the evidence D-043 is for.
+2. **Decisions written before the commits that cite them.** No commit message carries an owed
+   label; every `Refs:` resolves.
+3. **Comparing the disk copy with the context before numbering.** It found the corrupted context
+   copy and D-041's lag before either was built on.
+
+**Didn't.**
+
+1. **A separate sparring repository** — indirection between two repositories, and the learning kept
+   apart from the evidence.
+2. **Running a packet on the stage branch that surfaced it, or `m<N>/learn-<concept>`** — the track
+   belongs to no milestone, and a packet can outlive its stage.
+3. **A flat `learning/<concept>/` with `learning/LEDGER.md`** — one more name, and no room for a second
+   packet on a topic.
+4. **`learn(<concept>)` as a scoped type** — sparring work does not divide cleanly by concept.
+5. **Fluency targets as a gate before the check set**, and **per-packet exit scores** — correct usage
+   gates the check set (C at fluency 7); regex exits at 7 like any concept.
+6. **Gleam, Hare, TypeScript, Haskell, Swift, Ada/SPARK and Odin** as sparring languages (D-042).
+7. **A COMMITS.md rule for `ground-up`'s unprefixed name** — a one-off.
+
+**Friction.**
+
+1. **The context's DECISIONS.md was corrupted.** A draft of D-041 sat pasted four times inside
+   D-032's *Supersedes* line and once more before D-041. The disk copy was clean; only a comparison
+   made before numbering showed it.
+2. **Two copies drifted again.** D-041 on disk was its first draft while the context held the later
+   text, and the disk CLAUDE.md §5.3 still carried the inline review rules. Same failure as the
+   previous entry's Friction 3.
+3. **Two commits went in without a type** — "add learn/ to style layout" and "record D-042 and D-043
+   in aside notes". COMMITS.md makes the type mandatory; the deferred `commit-msg` hook is what
+   would have caught it.
+4. **`learn:` was used before COMMITS.md defined it**, because the commit order put `learn/` ahead
+   of the COMMITS.md edits. Harmless, and accepted as a temporary misalignment.
+
+**Stubbed.** The CLAUDE.md-tracking row leaves *Deliberately incomplete*. The ledger's
+`portability-layers` link points at a folder not written yet. Sparring build outputs go into
+`.gitignore` when the first one appears.
+
+**Next.**
+
+1. Merge `ground-up`; check the D-041 issue shows `closed`; delete the remote branch.
+2. Confirm r001's #17–#20 are closed.
+3. The git hooks on `tool/commit-hook` — `commit-msg` and `pre-push` — before anything else is pushed: two untyped
+   commits reached this branch, and pushed history is final.
+4. Then the M1 descope, the harness remainder and `m1/fatal-cleanup`. Packet branches are cut only
+   after the merge.
+
+**Note for next session.** The one-active-packet conflict between `remote-tracking` (paused) and
+`portability-layers` (open) is still unresolved. The alignment packet is still untouched.
 
 ---
 
