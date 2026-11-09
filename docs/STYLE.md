@@ -1,6 +1,6 @@
 # Krama — C Coding Standards
 
-**Version:** 1.6 · **Date:** 2026-11-08
+**Version:** 1.7 · **Date:** 2026-11-09
 **Status:** Final for milestone 1. Amend by addition when a rule is actually needed.
 **Target standard:** C23 (`-std=c23`, pinned)
 
@@ -177,13 +177,14 @@ able to change what a user reads.
 ```
 README.md          project overview
 PROJECT.md         current state and work log
-CLAUDE.md          assisstant interaction riles - see D-023
+CLAUDE.md          assistant interaction rules — see D-023, D-043
 Makefile
 src/               all sources and headers, flat
 tests/             .krm / .expected pairs and the driver
 spec/              language and transpiler specification
 docs/              session notes, DECISIONS.md, STYLE.md, COMMITS.md
 tools/             scripts supporting the docs and build — stdlib only
+learn/             the /ground-up track: topic and packet folders, README.md ledger — see D-042
 build/             object files and binaries — gitignored
 ```
 
@@ -192,6 +193,11 @@ of how it got that way. When the spec loses context, the notes supply it.
 
 `tools/` scripts use the Python standard library only — no virtualenv, no dependency file, nothing
 to bootstrap on a fresh clone. Same reasoning as the zero-dependency test suite.
+
+C under `learn/` follows this document like any other C in the repository (D-042). Each exercise
+builds on its own, with the §12 flags; the Makefile's gate never builds anything under `learn/`.
+Where a rule means nothing in a sparring program — a `KRAMA_` guard on a header that is not a Krama
+module, say — raise it as an amendment here rather than skipping it.
 
 Flat `src/` with headers beside their sources. The `include/` versus `src/` split exists for
 libraries that install public headers; kramac is a binary with no public API, so there is nothing to
