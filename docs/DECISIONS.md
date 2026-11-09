@@ -56,11 +56,15 @@ place.
 | D-039 | The harness parses `exit_codes.h` for its exit-code map | Decided | 18 |
 | D-040 | The test driver's minimum Python is 3.13 | Decided | 21 |
 | D-041 | Stage branches are pushed; pushed history is final; reviews are tracked as issues | Decided | 22 |
+| D-042 | `/ground-up`: a parallel learning track, assessed, outside the transpiler | Decided | A-01 |
+| D-043 | `CLAUDE.md` is tracked in the repository | Decided | A-01 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
 **Session** is the numbered discussion note the entry came from (`krama-notes-NN-*`).
 Entries before D-033 predate that convention and carry `##`.
+`A-NN` marks an entry that came from an aside note (`aside-notes-NN-*`) rather than a
+`krama-notes` session.
 
 ---
 
@@ -1282,16 +1286,17 @@ PEP 701.
 ### D-041 — Stage branches are pushed; pushed history is final; reviews are tracked as issues
 
 **Status:** Decided · **Session:** 22 · **Spec:** n/a (process) — supersedes D-030; detailed in
-COMMITS.md
+COMMITS.md and `docs/review/README.md`
 
 **Decided.** Stage branches (`m<N>/<stage>`) are pushed to GitHub. Pushed history is final: Rule 4
 covers every pushed ref, and nothing is force-pushed. Commits are cleaned up *before* each push —
 `wip` stays local — and checked with `git rebase -i --exec "make check" @{upstream}` (`main` on a
 branch's first push). The squash at the merge gate is dropped; the `--no-ff` merge with a dense
-stage summary stays. Work is committed and pushed before review. Findings are filed as GitHub issues
-titled `<branch>-rNNN · <group>: <summary>`, from a review file at
-`docs/review/<milestone>/<branch>/rNNN.md`. The commit that fixes an issue carries `Closes: #N`, one
-line per issue. No pull requests. After merging, the remote branch is deleted.
+stage summary stays. Work is committed and pushed before review. A review is a file per pass at
+`docs/review/<milestone>/<branch>/rNNN.md`; its findings are stated as failing inputs rather than
+locations, and a follow-up pass reruns them with fresh outliers. Each group of findings is a GitHub
+issue titled `<branch>-rNNN · <group>: <summary>`. The commit that fixes an issue carries
+`Closes: #N`, one line per issue. No pull requests. After merging, the remote branch is deleted.
 
 **Rejected.**
 
@@ -1310,6 +1315,13 @@ line per issue. No pull requests. After merging, the remote branch is deleted.
 - *Pull requests.* A diff page per branch, and GitHub's automatic branch deletion. Rejected for now:
   one contributor at a small scale, and a PR would be a second place to look beside the review file
   and its issues.
+- *Findings that name the location to change,* as r001 did. Fastest to act on. Rejected because a
+  fix to a named line can pass the shown case and miss the defect — r001's own fix round rejected
+  every `9` while passing its table. Inputs that fail, rerun with outliers the fix has not seen,
+  test whether the defect was understood.
+- *Outliers written into the review in advance.* They would be visible to the programmer before the
+  fix. Rejected; they are derived when the follow-up pass runs, which also keeps them from being
+  tuned to a fix.
 - *A `pre-push` hook running `make check`.* Enforces Rule 1 mechanically. Rejected: a slow hook
   trains `--no-verify`. A hook that rejects `wip`, `fixup!` and `squash!` subjects is the cheap
   check worth having.
@@ -1317,7 +1329,9 @@ line per issue. No pull requests. After merging, the remote branch is deleted.
 **Why.** Issues are the tracker, and a tracker whose links can dangle is not one. Pushing before
 review makes the reviewed state reproducible, and declaring pushed history final gives Rule 4 one
 meaning again. Moving cleanup in front of the push keeps what the rebase gave D-030 — logical
-commits on `main` — without rewriting anything an issue can see.
+commits on `main` — without rewriting anything an issue can see. Stating findings as failing inputs
+keeps a review on the side of the project's aim: the fix, and the understanding behind it, stay
+with the programmer.
 
 **Consequences.**
 
@@ -1327,11 +1341,12 @@ commits on `main` — without rewriting anything an issue can see.
 - `wip` commits are never pushed; the push gate replaces the merge gate's rewrite.
 - Closing keywords act when the fixing commit lands on the default branch. Each closed issue is
   checked after `main` is pushed: `closed`, not `referenced`.
-- `rNNN` restarts at `r001` on each branch. A review that re-checks an earlier pass's fixes names it
-  in a `Follows` field and opens with that pass's issue status.
+- A fix that passes the shown inputs but fails an outlier keeps its issue open, and the finding
+  climbs one escalation step (CLAUDE.md §5.3).
 - Branch deletion is by hand (`git push origin --delete`), with `git fetch --prune`. After a `--no-ff`
   merge the branch's commits are reachable from `main`, so issue links survive.
 - Unmerged work is no longer on one machine only.
+- r001 predates the review rules and stays as written.
 - PROJECT.md's 2026-09-18 **Didn't** line ("pushed branches and pull requests — rejected") stands,
   answered by a later entry.
 
@@ -1340,7 +1355,168 @@ replace the push gate's local check); or a pushed commit genuinely must be rewri
 secret is the realistic case, and needs an exception path written down when it first happens.
 
 **Reference.** `krama-notes-22-workflow-2`; `krama-notes-21` §6; `krama-notes-09`; D-030, D-031;
-GitHub Docs, "Linking a pull request to an issue".
+`aside-notes-06`; GitHub Docs, "Linking a pull request to an issue".
+
+---
+
+### D-042 — `/ground-up`: a parallel learning track, assessed, outside the transpiler
+
+**Status:** Decided · **Session:** A-01 · **Spec:** n/a (process) — refines D-023; CLAUDE.md §8
+
+**Decided.** CLAUDE.md gains §8, `/ground-up`: a declinable detour for one concept, run as a
+learning track parallel to the milestones and belonging to none of them. Claude estimates
+understanding of any concept that comes up, on an anchored 1–10 scale with the evidence stated, and
+requests a packet below 7, naming a topic and a scope. An accepted packet runs through reading, a
+guide set and, where the scope includes code, sparring in one of C, C++, Zig, OCaml, Go or Rust.
+Code is reviewed until no concept finding is open and no language misuse remains, and C code must
+also reach fluency 7. Only then is a held-back check set issued. Clearing needs 7 on the check set
+plus a written summary, and the programmer confirms the release. Declines are recorded and never
+erased.
+
+Everything the track produces lives under `learn/`: a folder per topic, a folder per packet inside
+it, the packet as that folder's `README.md`, and one ledger, `learn/README.md`, with topic, scope
+and language columns. Each packet runs on its own branch, `learn/<topic>/<packet>`, and may outlive
+any number of stage branches. Sparring C is held to STYLE.md like all other C in the repository.
+
+**Rejected.**
+
+- *Leaving it informal, with PROJECT.md's "friction drives exercises" convention as the only
+  mechanism.* It already exists and costs nothing. Rejected on its record: the alignment exercise
+  was scheduled on 2026-09-17 and carried forward untouched in every log entry since. A convention
+  with no entry point and no exit condition gets deferred indefinitely.
+- *`/ground-up` as a fifth role.* Roles are sticky and hold until another is named. A packet has its
+  own exit condition and then returns to whatever role was standing.
+- *A single question set, given either before or after the work.* Given before, it steers the
+  reading (the pretesting effect) but lets the assessment measure whether the questions' answers
+  were found. Given after, it measures honestly (retrieval practice) but leaves the work unaimed.
+  Split instead: a guide set up front, and a different check set held back.
+- *A tighter trigger: request only for concepts the active work depends on.* Fewer interruptions.
+  Rejected because the request is declinable: a loose trigger costs one sentence of judgement,
+  while a tight one hides gaps the programmer might have wanted to close. The proposed scope keeps
+  it cheap.
+- *Requiring each language's fluency target before the check set.* Rejected: a first exercise in a
+  new language would turn into a fluency programme, and the concept would wait behind the syntax.
+  The gate is correct usage, not fluent usage — except in C, the language of the work, where the
+  floor is 7.
+- *Measuring language fluency by working without references.* It can't be observed, and it measures
+  the wrong skill. What separates 6 from 7 is knowing which questions a call's contract raises.
+  Consulting a reference never lowers a score.
+- *A separate sparring repository.* Practice code in five other languages would stay well away from
+  `kramac`. Rejected on indirection: PROJECT.md would link into another repository, every packet
+  would mean switching between two, and the learning would sit beside the evidence rather than
+  inside it.
+- *Scoping STYLE.md to `src/` and `tests/`.* Lighter, since include-guard rules mean little in a
+  toy program. Rejected because CLAUDE.md §1 already says STYLE.md governs "the C written in this
+  repo", and practice code is where the transpiler's habits are built.
+- *Running a detour on the stage branch that surfaced it, with `m<N>/learn-<concept>` only for
+  backward runs.* The first design: a stage's merge would show the gap beside the code that needed
+  it. Rejected because the track belongs to no milestone. On a stage branch, an open packet either
+  holds the merge until it clears or is cut short to let it through, and a packet can outlive the
+  stage that raised it. A milestone number in a learning branch's name says something untrue.
+- *A flat `learning/<concept>/` with `learning/LEDGER.md`.* Rejected: a second packet on the same
+  topic needs a sibling, not a rename, and `LEDGER.md` is one more name to remember. A folder's
+  `README.md` is what GitHub renders when the folder is opened, so the ledger is the page a visitor
+  sees at `learn/`.
+- *`learn(<concept>)` as a scoped commit type.* Rejected: sparring work does not divide cleanly by
+  concept — an exercise under memory may teach alignment — so the scope vocabulary would be
+  open-ended. The type is unscoped, like `build`.
+- *Hare, TypeScript, Haskell, Swift, Ada/SPARK, Odin or Gleam as sparring languages.* Hare shares
+  C's paradigm and is the language Claude assesses least reliably. TypeScript's types are erased
+  over a dynamic runtime. Haskell's laziness is a detour of its own. Swift (reference counting) and
+  Ada/SPARK (proving the absence of overflow) had real merit and remain candidates. Odin overlaps
+  Zig. Gleam reads most familiarly but has no mutation and no loops, so cursor-and-buffer problems
+  become lessons in the language rather than the concept; OCaml carries the compiler material.
+
+**Why.** The project's aim is the experience of building, and gaps compound: alignment was
+misunderstood twice before it was worked by hand. A mechanism that makes gaps visible, leaves the
+decision with the programmer, and demands evidence at both ends turns friction into practice.
+Sparring outside C tests whether a concept has been learned or only its C spelling. Running it as a
+separate track keeps it from costing the main line its momentum, which is what would make the
+programmer decline it.
+
+**Consequences.**
+
+- CLAUDE.md goes to 1.2. §8 is added; §2 gains a line on `learn/` (Claude writes its prose, never
+  an exercise's code) and a paragraph stating that workflow help — commit messages, review files,
+  issue text, git and `gh` steps — is not project code; §5's preamble, §7 and the closing
+  reference are updated. The anchor tables live in
+  CLAUDE.md because they govern how Claude scores; the ledger records the results and defines its
+  own columns.
+- STYLE.md §3.1's layout gains `learn/`, with a version bump. Where a STYLE.md rule means nothing
+  in a sparring program, that is raised as an amendment, not quietly skipped.
+- **The gate never builds sparring code.** `make check` must not need Zig, OCaml, Go or Rust, on the
+  principle of D-037: Python is a test-side requirement, never a build requirement. Each exercise
+  builds on its own. Whether the format gate sweeps C under `learn/` is checked against the
+  Makefile, not assumed.
+- `.gitignore` gains each sparring language's build output.
+- **COMMITS.md gains learning branches.** `learn/<topic>/<packet>` is the one exception to
+  short-lived branches, merged with `--no-ff` when the packet reaches a final status. No branch may
+  be named `learn` or `learn/<topic>`, because Git stores refs as paths. The deferred merge hook
+  gains a third pattern.
+- **The ledger is shared by every packet branch.** Two open branches that each add a row conflict in
+  `learn/README.md` at merge. Under the one-active-packet limit (CLAUDE.md §8.7) this is rare, and
+  the resolution is keeping both rows.
+- A declined packet has no branch; its ledger row is committed on the branch the session is on.
+- `PROJECT.md` gains two duties: a declined request is noted under **Didn't**, and an open or paused
+  packet is named in **Current**.
+- **Publishing.** The written summaries are *Road to Krama*. They were first planned for the GitHub
+  wiki (`aside-notes-01` §8.4). `aside-notes-04` §7 moved them to GitHub Pages before this entry
+  landed, and that is what applies. Either way, the free plan needs the repository to stay public.
+- D-023 stays `Decided`. This entry extends it rather than replacing it, following D-024 and D-027,
+  which refine D-003.
+- Nothing here touches `src/`, `tests/` or the build.
+
+**Revisit if.**
+
+- Declines outnumber acceptances over a stretch. The trigger is then too loose to tell anything.
+- Scores stop moving after clearances: the check set is measuring something other than
+  understanding.
+- A language slot goes unused for a whole milestone.
+- Packet branches start conflicting routinely in the ledger — then the ledger is in the wrong place.
+
+**Reference.** Bjork, *desirable difficulties*; the pretesting effect and the testing effect
+(retrieval practice); interleaving; the Feynman technique; D-023; D-037; D-041; PROJECT.md
+*Conventions* ("friction drives exercises"); `aside-notes-01`, `aside-notes-04` §7.
+
+---
+
+### D-043 — `CLAUDE.md` is tracked in the repository
+
+**Status:** Decided · **Session:** A-01 · **Spec:** n/a (process) — supersedes one consequence of
+D-032
+
+**Decided.** `CLAUDE.md` is removed from `.gitignore` and committed. From here on it changes through
+ordinary commits, like any other document.
+
+**Rejected.**
+
+- *Keeping it ignored.* In its favour: the file governs an assistant, not the code, and nobody needs
+  it to build or understand Krama. Rejected because the repository makes a claim — that the code was
+  written by its author under a mentoring regime — and the rules of that regime are the evidence for
+  the claim. An ignored file also can't be reviewed, diffed or bisected, and a fresh clone doesn't
+  receive it (D-032 already recorded that cost).
+- *Publishing it only in the README or on the site.* Visible, but a copy, and two copies drift
+  (CLAUDE.md §1). PROJECT.md 2026-11-08 Friction 3 is that drift happening.
+
+**Why.** Transparency. Once tracked, the file shows what the assistant was allowed to do and when
+that changed. Together with the issue history, the Friction entries, the review files and the *Road
+to Krama* posts, it is part of the evidence that the work was done rather than generated. The reason
+does not depend on any one tool: all review happens in the Claude project, and the file reaches it
+through the project context (`aside-notes-04` §8).
+
+**Consequences.**
+
+- D-032's consequence "CLAUDE.md is gitignored … a fresh clone does not receive it" no longer holds.
+- STYLE.md §3.1 already lists `CLAUDE.md`, so it needs no change for this entry.
+- The project context's copy becomes a mirror of the tracked file, not a second original. The
+  1.1-versus-1.1 drift closes when this lands.
+- Git history for the file starts at the commit that tracks it. Earlier versions exist only in the
+  version header.
+- PROJECT.md's *Deliberately incomplete* row for CLAUDE.md tracking is removed.
+
+**Revisit if.** The file comes to hold something that shouldn't be public.
+
+**Reference.** D-023; D-032; D-042; `aside-notes-04` §8.
 
 ---
 
