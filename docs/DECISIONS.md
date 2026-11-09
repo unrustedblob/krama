@@ -1286,16 +1286,17 @@ PEP 701.
 ### D-041 — Stage branches are pushed; pushed history is final; reviews are tracked as issues
 
 **Status:** Decided · **Session:** 22 · **Spec:** n/a (process) — supersedes D-030; detailed in
-COMMITS.md
+COMMITS.md and `docs/review/README.md`
 
 **Decided.** Stage branches (`m<N>/<stage>`) are pushed to GitHub. Pushed history is final: Rule 4
 covers every pushed ref, and nothing is force-pushed. Commits are cleaned up *before* each push —
 `wip` stays local — and checked with `git rebase -i --exec "make check" @{upstream}` (`main` on a
 branch's first push). The squash at the merge gate is dropped; the `--no-ff` merge with a dense
-stage summary stays. Work is committed and pushed before review. Findings are filed as GitHub issues
-titled `<branch>-rNNN · <group>: <summary>`, from a review file at
-`docs/review/<milestone>/<branch>/rNNN.md`. The commit that fixes an issue carries `Closes: #N`, one
-line per issue. No pull requests. After merging, the remote branch is deleted.
+stage summary stays. Work is committed and pushed before review. A review is a file per pass at
+`docs/review/<milestone>/<branch>/rNNN.md`; its findings are stated as failing inputs rather than
+locations, and a follow-up pass reruns them with fresh outliers. Each group of findings is a GitHub
+issue titled `<branch>-rNNN · <group>: <summary>`. The commit that fixes an issue carries
+`Closes: #N`, one line per issue. No pull requests. After merging, the remote branch is deleted.
 
 **Rejected.**
 
@@ -1314,6 +1315,13 @@ line per issue. No pull requests. After merging, the remote branch is deleted.
 - *Pull requests.* A diff page per branch, and GitHub's automatic branch deletion. Rejected for now:
   one contributor at a small scale, and a PR would be a second place to look beside the review file
   and its issues.
+- *Findings that name the location to change,* as r001 did. Fastest to act on. Rejected because a
+  fix to a named line can pass the shown case and miss the defect — r001's own fix round rejected
+  every `9` while passing its table. Inputs that fail, rerun with outliers the fix has not seen,
+  test whether the defect was understood.
+- *Outliers written into the review in advance.* They would be visible to the programmer before the
+  fix. Rejected; they are derived when the follow-up pass runs, which also keeps them from being
+  tuned to a fix.
 - *A `pre-push` hook running `make check`.* Enforces Rule 1 mechanically. Rejected: a slow hook
   trains `--no-verify`. A hook that rejects `wip`, `fixup!` and `squash!` subjects is the cheap
   check worth having.
@@ -1321,7 +1329,9 @@ line per issue. No pull requests. After merging, the remote branch is deleted.
 **Why.** Issues are the tracker, and a tracker whose links can dangle is not one. Pushing before
 review makes the reviewed state reproducible, and declaring pushed history final gives Rule 4 one
 meaning again. Moving cleanup in front of the push keeps what the rebase gave D-030 — logical
-commits on `main` — without rewriting anything an issue can see.
+commits on `main` — without rewriting anything an issue can see. Stating findings as failing inputs
+keeps a review on the side of the project's aim: the fix, and the understanding behind it, stay
+with the programmer.
 
 **Consequences.**
 
@@ -1331,11 +1341,12 @@ commits on `main` — without rewriting anything an issue can see.
 - `wip` commits are never pushed; the push gate replaces the merge gate's rewrite.
 - Closing keywords act when the fixing commit lands on the default branch. Each closed issue is
   checked after `main` is pushed: `closed`, not `referenced`.
-- `rNNN` restarts at `r001` on each branch. A review that re-checks an earlier pass's fixes names it
-  in a `Follows` field and opens with that pass's issue status.
+- A fix that passes the shown inputs but fails an outlier keeps its issue open, and the finding
+  climbs one escalation step (CLAUDE.md §5.3).
 - Branch deletion is by hand (`git push origin --delete`), with `git fetch --prune`. After a `--no-ff`
   merge the branch's commits are reachable from `main`, so issue links survive.
 - Unmerged work is no longer on one machine only.
+- r001 predates the review rules and stays as written.
 - PROJECT.md's 2026-09-18 **Didn't** line ("pushed branches and pull requests — rejected") stands,
   answered by a later entry.
 
@@ -1344,7 +1355,7 @@ replace the push gate's local check); or a pushed commit genuinely must be rewri
 secret is the realistic case, and needs an exception path written down when it first happens.
 
 **Reference.** `krama-notes-22-workflow-2`; `krama-notes-21` §6; `krama-notes-09`; D-030, D-031;
-GitHub Docs, "Linking a pull request to an issue".
+`aside-notes-06`; GitHub Docs, "Linking a pull request to an issue".
 
 ---
 
