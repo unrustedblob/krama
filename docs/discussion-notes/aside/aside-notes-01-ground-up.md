@@ -6,12 +6,23 @@ designed, not the transpiler. It sits outside the `krama-notes` numbering, and e
 carry the Session tag `A-01`.
  
 > Nothing here is binding. Where this note and `CLAUDE.md` / `DECISIONS.md` / `STYLE.md` /
-> `COMMITS.md` disagree, those win. The rule itself is CLAUDE.md §8; the rationale is owed as
-> DR-OWED-A01-01 and DR-OWED-A01-02.
+> `COMMITS.md` disagree, those win. The rule itself is CLAUDE.md §8; the rationale is D-042 and
+> D-043.
  
 > **Relabelled 2026-11-08.** This note first drafted its two decisions as D-039 (`/ground-up`) and
 > D-040 (CLAUDE.md tracked). Those IDs went to the harness decisions on `m1/cli-args` before
 > `m1/ground-up` landed, so the pair is now owed and numbered when it lands (`krama-notes-22` §9).
+
+> **Owed decisions, landed 2026-11-09** on the `ground-up` branch:
+>
+> | Owed | Decision | ID |
+> |---|---|---|
+> | DR-OWED-A01-01 | `/ground-up`: a parallel learning track | **D-042** |
+> | DR-OWED-A01-02 | `CLAUDE.md` is tracked in the repository | **D-043** |
+>
+> The design landed revised from this note: the track belongs to no milestone, each packet runs on
+> its own branch `learn/<topic>/<packet>`, and everything lives under `learn/` with the ledger at
+> `learn/README.md` (D-042). Where §8 and §12 below say otherwise, D-042 wins.
  
 It interrupts `krama-notes-18-case-manifest`. `m1/cli-args` commit 5 is still open, and its first
 question is still unanswered (§11).
