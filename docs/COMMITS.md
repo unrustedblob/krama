@@ -405,8 +405,11 @@ refactor(parse): extract operand loop from additive and multiplicative
   seconds, `--no-verify` becomes reflex and the enforcement is theatre.
 
 - **`pre-push` hook rejecting unsquashed commits.** For each ref pushed, read the subjects of the
-  commits leaving the machine (`main..local` for a new branch, `remote..local` otherwise) and refuse
-  any starting `wip`, `fixup!` or `squash!`. Milliseconds per push. Not `make check` — a slow hook
+  commits leaving the machine — everything reachable from the local SHA and from none of the
+  remote's tracking refs (`git rev-list <local> --not --remotes=<remote>`), one rule for new and
+  existing branches alike; a deletion (local SHA all zeros) sends nothing and is skipped — and refuse
+  any starting `wip`, `fixup!` or `squash!`. Not `main..local`: it misses commits whenever local
+  `main` is ahead of the remote's. Milliseconds per push. Not `make check` — a slow hook
   trains `--no-verify`.
 
 - **Tag milestone completions** — `git tag v0.1-milestone1`. Gives a stable reference for "the
