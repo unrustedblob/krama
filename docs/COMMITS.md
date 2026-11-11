@@ -159,6 +159,18 @@ m<N>/<stage>
 - The branch name is used **verbatim** as the merge commit label (see *Merging*), so the spelling
   chosen at creation is the spelling in `main`'s history.
 
+Tooling that belongs to no milestone — hooks, scripts under `tools/` — goes on a tool branch:
+
+```
+tool/<name>
+```
+
+- **Lowercase, hyphen-separated words, one component:** `tool/commit-hook`. No comma list; a tool
+  branch covering two tools should be two branches.
+- **Otherwise a stage branch.** Short-lived, cut from an up-to-date `main`, pushed, merged with
+  `--no-ff`, deleted. The name is used verbatim as the merge label: `tool/commit-hook: <subject>`.
+- **Never name a branch `tool`.** As with `learn`, a branch `tool` cannot coexist with `tool/<name>`.
+
 ### Lifecycle
 
 - **Short-lived: one branch per stage.** Created from an up-to-date `main`, merged, deleted. The next
@@ -375,14 +387,16 @@ refactor(parse): extract operand loop from additive and multiplicative
   automating a process that has not settled tends to enforce the wrong thing.
 -->
 
-- **`commit-msg` hook** validating the format. A shell script reading `$1` and matching the subject
-  line against three patterns:
+- **`commit-msg` hook** validating the format. A script reading its one argument, the message file,
+  and matching the subject line against four patterns:
   - ordinary commits — type mandatory, scope optional:
     `^(feat|fix|refactor|test|docs|build|perf|chore|learn)(\([a-z]+(,[a-z]+)?\))?: .+$`
   - merge commits — branch-name label:
     `^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .+$`
   - learning merge commits:
     `^learn/[a-z0-9-]+/[a-z0-9-]+: .+$`
+  - tool merge commits:
+    `^tool/[a-z0-9-]+: .+$`
 
   Length checked separately against the 50/72 limits. Roughly twenty lines, and a legitimate aim-2
   exercise. Without the merge patterns the hook rejects every merge.

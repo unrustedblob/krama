@@ -10,34 +10,30 @@
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print` — to be descoped (see
 Next up)
 
-**Working on:** `ground-up` — the `/ground-up` learning track lands. D-042: a track parallel to the
-milestones, assessed on an anchored scale, living under `learn/<topic>/<packet>/` with the ledger at
-`learn/README.md`, each packet on its own branch. D-043: CLAUDE.md is tracked, committed at 1.1 and
-then 1.2 so the rule change is a diff. COMMITS.md gains the `learn` type and learning branches;
-STYLE.md goes to 1.7. D-041's body is brought in line with the review rules. `m1/workflow-2` is
-merged — the first merge under D-041
+**Working on:** `tool/commit-hook` — the `commit-msg` and `pre-push` hooks, in Python under
+`tools/` (STYLE.md §3.1), written by the programmer in six small steps. COMMITS.md gains tool
+branches and the fourth merge pattern, and its `pre-push` note is corrected: the commits leaving the
+machine are those reachable from the local SHA and from none of the remote's tracking refs, not
+`main..local`. `ground-up` is merged
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`. The harness is not in the gate
 
-**Next up:** Merge `ground-up` with `--no-ff`, check the D-041 issue shows `closed`, delete the
-remote branch. Confirm r001's #17–#20 are closed: the fix commit's comma-listed `Closes:` closed
-only #16 (`aside-notes-06`).
+**Next up:** Step 1 of the hooks — a `commit-msg` that prints the first line and exits 0, wired
+through `core.hooksPath`. Still to confirm from the `ground-up` merge: the D-041 issue shows
+`closed`; the remote branch is deleted; r001's #17–#20 are closed (the comma-listed `Closes:`
+closed only #16, `aside-notes-06`).
 
 **Paused packet:** `git/remote-tracking` (score 5) — the lab in `learn/git/remote-tracking/README.md`,
 accepted 2026-10-21 and put on hold 2026-10-23. Nothing waits on it now that D-041 answered Rule 4's
 scope; it conflicts with `portability/portability-layers` (open) under the one-active-packet limit
-(CLAUDE.md §8.7). Its branch is cut only after `ground-up` merges. The rest of the track is in
-`learn/README.md`.
+(CLAUDE.md §8.7). `git/reachability` (score 3, queued 2026-11-11) sits underneath it and is the
+cheaper one to take first. The rest of the track is in `learn/README.md`.
 
-Then, branch order decided after the merge:
+Then, after `tool/commit-hook`:
 
-- **The git hooks — first, on `tool/commit-hook`.** `commit-msg` checks the subject against COMMITS.md's patterns (type
-  mandatory, the merge and learning-merge labels, the 50/72 limits); `pre-push` refuses commits whose
-  subject starts `wip`, `fixup!` or `squash!`. Pushed history is final (D-041), so a malformed
-  subject that gets pushed stays — this branch's two untyped commits are the case.
 - **The M1 descope** — the arena cull, the `story/` layout, spec v2 with the new syntax
   (DR-OWED-A02-01 … -06, `aside-notes-02`, `aside-notes-04`).
 - **The harness remainder** — `tests/stage/args/` with its six cases written in the new syntax, the
@@ -57,7 +53,7 @@ Then, branch order decided after the merge:
 | `tests/unit_tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
-| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. `commit-msg` and `pre-push` are the next branch after `ground-up`; `pre-commit` waits until the first two are habitual |
+| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. `commit-msg` and `pre-push` are in progress on `tool/commit-hook`; `pre-commit` waits until the first two are habitual |
 | `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 | `src/main.c` — argument contract | **Untested.** The harness validates manifests but has no runner, no fixtures, and is not in `make check`; commit 4's one-commit window stays open | The harness-remainder branch, after the descope. The fixtures need the new syntax |
 | `tests/harness/kramat.py` — header parser | Light: no enum scoping, no rejection of unknown lines inside the enum, no trailing comments. A misspelled enumerator compiles and silently shifts later values | Closed by the `--dump-exit-codes` cross-check, #21 (D-039). `exit_codes.h`'s header comment states the format rules meanwhile |
