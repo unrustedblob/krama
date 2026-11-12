@@ -1,0 +1,11 @@
+# Ruff settings for Krama's Python (STYLE.md §13). Everything not set here is ruff's default; each
+# line below is a deliberate departure from it. Takes precedence over any user-level ruff config.
+
+# Matches the author's editor width for code. Comments still aim for 80 columns by habit.
+line-length = 100
+
+# The pinned interpreter (D-040).
+target-version = "py313"
+
+# Git hooks have no `.py` extension, so ruff would skip them when run over a directory.
+extend-include = ["tools/hooks/*"]
