@@ -58,6 +58,7 @@ place.
 | D-041 | Stage branches are pushed; pushed history is final; reviews are tracked as issues | Decided | 22 |
 | D-042 | `/ground-up`: a parallel learning track, assessed, outside the transpiler | Decided | A-01 |
 | D-043 | `CLAUDE.md` is tracked in the repository | Decided | A-01 |
+| D-044 | Python lint settings live in a repository `ruff.toml` | Decided | 23 |
 
 **Status values:** `Decided` · `Deferred` · `Superseded by D-###` · `Reopened`
 
@@ -1517,6 +1518,51 @@ through the project context (`aside-notes-04` §8).
 **Revisit if.** The file comes to hold something that shouldn't be public.
 
 **Reference.** D-023; D-032; D-042; `aside-notes-04` §8.
+
+---
+
+### D-044 — Python lint settings live in a repository `ruff.toml`
+
+**Status:** Decided · **Session:** 23 · **Spec:** n/a (tooling) — amends STYLE.md §13's Python row
+
+**Decided.** The repository root carries a `ruff.toml` that sets only what departs from ruff's
+defaults: a 100-column line, the Python 3.13 target (D-040), and the extensionless git hooks under
+`tools/hooks/`. STYLE.md §13 names the file instead of saying "default settings". Ruff stays
+author-side and outside `make check`.
+
+**Rejected.**
+
+- *Ruff's defaults, no file.* What STYLE.md already said, with nothing to maintain. Rejected because
+  the author's code width is 100: at 88, ruff would flag and reflow lines written that way on
+  purpose, and every review against STYLE.md would raise them as findings.
+- *The rule in STYLE.md's words only, with the 100 set in the author's user-level ruff config.* No
+  new file. Rejected because it is the state that was found: the user config at
+  `~/.config/ruff/ruff.toml` silently set the width, the document said otherwise, and a fresh clone or
+  a second machine would lint at 88. The settings depended on the machine, not the repository.
+- *A full config copied from ruff's documentation.* Everything stated explicitly. Rejected because
+  nearly every line restated a default; the two choices that mattered were hidden among them, and a
+  later reader could not tell a decision from boilerplate.
+
+**Why.** What the code is checked against should not depend on which machine checks it — the same
+argument that made the commit hook state `encoding="utf-8"` rather than trust the locale. A
+repository-level `ruff.toml` takes precedence over a user-level one, so it travels with every clone,
+and keeping it to departures from the defaults makes each line a decision.
+
+**Consequences.**
+
+- STYLE.md 1.8: §13's Python row names `ruff.toml` and its three departures; §3.1's layout lists the
+  file.
+- Inside the repository, the author's user-level ruff config no longer applies.
+- A directory run (`ruff check .`) now lints `tools/hooks/*`; before, only naming a hook directly
+  did.
+- Any further departure from ruff's defaults is a line in `ruff.toml` and a change to the STYLE.md
+  row, together.
+
+**Revisit if.** Python style enters `make check` or CI — the file then becomes enforcement rather
+than a record, and its settings deserve a second look — or ruff changes how it resolves configuration
+files.
+
+**Reference.** STYLE.md §13; D-037; D-040; ruff's documentation on configuration discovery.
 
 ---
 
