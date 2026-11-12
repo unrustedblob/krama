@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
 
+# Hook for validating commit messages for Krama
+# Checks for empty message, an empty line after the subject and the subject's
+# line length
+
+import os
 import sys
 
-with open(sys.argv[1], "r") as f:
+# Assumes git config i18n.commitEncoding is unset
+with open(sys.argv[1], "r", encoding="UTF-8") as f:
     lines = f.readlines()
 
-filtered = [line.rstrip() for line in lines if not line.startswith("#")]
+filtered = [line.rstrip() for line in lines]
+
+# Mirror git's behaviour - stripping '#' lines when an editor ran (GIT_EDITOR is not ':')
+if os.getenv("GIT_EDITOR") != ":":
+    filtered = [line.rstrip() for line in lines if not line.startswith("#")]
 
 while filtered and not filtered[0]:
     _ = filtered.pop(0)
@@ -16,4 +26,14 @@ if not filtered:
 if len(filtered) > 1 and filtered[1]:
     sys.exit("[FmtError] An empty line is required after the subject line")
 
-print(filtered[0])
+subject = filtered[0]
+
+if len(subject) > 72:
+    sys.exit(f"[FmtError] Subject line limited to 72 columns, got {len(subject)}")
+
+if len(subject) > 50:
+    print(
+        f"[FmtWarn] Recommended to keep subject within 50 columns, got {len(subject)}",
+        file=sys.stderr,
+    )
+print(subject)
