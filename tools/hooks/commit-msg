@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 
 # Hook for validating commit messages for Krama
-# Checks for empty message, an empty line after the subject and the subject's
-# line length
+# Checks for
+#   1. Empty message
+#   2. An empty line after the subject
+#   3. The subject's line length
+#   4. Whether subject follows the required pattern for ordinary and merge
+#      commits
+# Note: Only validates the pattern for merge commits not if the pattern correctly
+#       refers to the intended merge
 
 import os
+import re
+import subprocess
 import sys
+from enum import Enum
 
 # Assumes git config i18n.commitEncoding is unset
 with open(sys.argv[1], "r", encoding="UTF-8") as f:
@@ -36,4 +45,39 @@ if len(subject) > 50:
         f"[FmtWarn] Recommended to keep subject within 50 columns, got {len(subject)}",
         file=sys.stderr,
     )
-print(subject)
+
+command = "git rev-parse -q --verify MERGE_HEAD"
+proc = subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, check=False)
+
+
+class RegexCommitType(Enum):
+    ORDINARY = r"^(feat|fix|refactor|test|docs|build|perf|chore|learn)(\([a-z]+(,[a-z]+)?\))?: .+$"
+    MERGE_GENERAL = "^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .+$"
+    MERGE_LEARN = "^learn/[a-z0-9-]+/[a-z0-9-]+: .+$"
+    MERGE_TOOL = "^tool/[a-z0-9-]+: .+$"
+
+
+if proc.returncode == 1:
+    regex = re.compile(RegexCommitType.ORDINARY.value)
+    if regex.fullmatch(subject) is None:
+        sys.exit("""[PatternError] Expected pattern for subject:
+                     <type>(<scope>): content
+                 See COMMITS.md for more info""")
+elif proc.returncode == 0:
+    patterns = [
+        RegexCommitType.MERGE_GENERAL.value,
+        RegexCommitType.MERGE_LEARN.value,
+        RegexCommitType.MERGE_TOOL.value,
+    ]
+    for pattern in patterns:
+        regex = re.compile(pattern)
+        if regex.fullmatch(subject) is not None:
+            break
+    else:
+        sys.exit("""[PatternError] Expected one of the following patterns for subject:
+                     m<N>/<branch-name>: content          # For merges related towards kramac milestone number `N`
+                     learn/<topic>/<subtopic>: content    # For merges related to learning (ground-up)
+                     tool/<tool-name>: content            # Merges related to tool updates
+                 See COMMITS.md for more info""")
+else:
+    sys.exit(f"Unhandled error (exit code {proc.returncode}) while running:\n\t{command}")
