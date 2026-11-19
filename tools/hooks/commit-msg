@@ -5,16 +5,28 @@
 #   1. Empty message
 #   2. An empty line after the subject
 #   3. The subject's line length
-#   4. Whether subject follows the required pattern for ordinary and merge
-#      commits
-# Note: Only validates the pattern for merge commits not if the pattern correctly
-#       refers to the intended merge
+#   4. For ordinary commits, the structure and then the types and scopes against
+#      COMMITS.md's tables (copied here, manual sync)
+#   5. For merge commits (MERGE_HEAD) available, the label against the 3 merge
+#      patterns
+#      Note: Only validates the pattern for merge commits not if the pattern
+#      correctly refers to the intended merge
 
 import os
 import re
 import subprocess
 import sys
-from enum import Enum
+from collections import Counter
+
+RED = "\033[31m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
+
+if not sys.stderr.isatty() or os.getenv("NO_COLOR"):
+    RED = ""
+    YELLOW = ""
+    RESET = ""
+
 
 # Assumes git config i18n.commitEncoding is unset
 with open(sys.argv[1], "r", encoding="UTF-8") as f:
@@ -30,19 +42,19 @@ while filtered and not filtered[0]:
     _ = filtered.pop(0)
 
 if not filtered:
-    sys.exit("[MsgError] Empty message")
+    sys.exit(f"{RED}[MsgError]{RESET} Empty message")
 
 if len(filtered) > 1 and filtered[1]:
-    sys.exit("[FmtError] An empty line is required after the subject line")
+    sys.exit(f"{RED}[FmtError]{RESET} An empty line is required after the subject line")
 
 subject = filtered[0]
 
 if len(subject) > 72:
-    sys.exit(f"[FmtError] Subject line limited to 72 columns, got {len(subject)}")
+    sys.exit(f"{RED}[FmtError]{RESET} Subject line limited to 72 columns, got {len(subject)}")
 
 if len(subject) > 50:
     print(
-        f"[FmtWarn] Recommended to keep subject within 50 columns, got {len(subject)}",
+        f"{YELLOW}[FmtWarn]{RESET} Recommended to keep subject within 50 columns, got {len(subject)}",
         file=sys.stderr,
     )
 
@@ -50,53 +62,122 @@ command = "git rev-parse -q --verify MERGE_HEAD"
 proc = subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, check=False)
 
 
-class RegexCommitType(Enum):
-    ORDINARY_LOOSE = r"^(\w+)(\(\w+(,\w+)*\))?: .+$"
-    ORDINARY_STRICT = (
-        r"^(feat|fix|refactor|test|docs|build|perf|chore|learn)(\([a-z]+(,[a-z]+)?\))?: .+$"
-    )
-    MERGE_GENERAL = "^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .+$"
-    MERGE_LEARN = "^learn/[a-z0-9-]+/[a-z0-9-]+: .+$"
-    MERGE_TOOL = "^tool/[a-z0-9-]+: .+$"
+# For a "first pass" check if the ordinary commit subject matches the pattern
+# structurally. Does not validate type and scope count, those are checked
+# separately as they're both fixed sets and it allows for better error reporting
+#
+# Examples
+# ---------
+# For valid subjects:
+#     foo(bar,baz,car): something    -- <type> followed by N <scope>s
+#     foo: something                 -- <type> followed by no <scope>s
+#
+# For invalid subjects:
+#     foo bar                        -- No <type> or <scope>
+REGEX_ORDINARY = r"^(\w+)(\(\w+(,\w+)*\))?: .*[^.,:;?!]$"
+
+# The merge commit subject structure for milestone track e.g., - m1/arena
+REGEX_MERGE_GENERAL = "^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .*[^.,:;?!]$"
+
+# The merge commit subject structure for learn track e.g., learn/git/hooks
+REGEX_MERGE_LEARN = "^learn/[a-z0-9-]+/[a-z0-9-]+: .*[^.,:;?!]$"
+
+# The merge commit subject structure for tool track e.g., tool/commit-msg
+REGEX_MERGE_TOOL = "^tool/[a-z0-9-]+: .*[^.,:;?!]$"
 
 
 if proc.returncode == 1:
-    regex = re.compile(RegexCommitType.ORDINARY_LOOSE.value)
+    regex = re.compile(REGEX_ORDINARY)
     structure_match = regex.fullmatch(subject)
     if structure_match is None:
         sys.exit(
-            "[PatternError] Expected pattern for subject:\n"
-            + "\t<type>(<scope>): content\n"
+            f"{RED}[PatternError]{RESET} Expected pattern for subject:\n"
+            + "\t<type>(<scope>): content\n\n"
+            + "Examples:\n"
+            + "---------\n"
+            + "  * fix(lex): add missing keywords to table\n"
+            + "  * test(lex,parse): validate fail cases\n\n"
+            + "Note:\n"
+            + "-----\n"
+            + "  * Subject should not end in a terminating punctuation [. , : ; ? !]\n\n"
             + "See COMMITS.md for more info"
         )
-    regex = re.compile(RegexCommitType.ORDINARY_STRICT.value)
-    strict_match = regex.fullmatch(subject)
-    if strict_match is None:
-        msg: list[str] = []
 
-        valid_types = ["feat", "fix", "refactor", "test", "docs", "build", "perf", "chore", "learn"]
-        type_in_commit = structure_match.group(1)
-        if type_in_commit not in valid_types:
-            msg.append(
-                f"Invalid <type>, got '{type_in_commit}', expected one of {'|'.join(valid_types)}"
+    valid_types = [
+        "feat",
+        "fix",
+        "refactor",
+        "test",
+        "docs",
+        "build",
+        "perf",
+        "chore",
+        "learn",
+    ]
+    type_in_commit = structure_match.group(1)
+    if type_in_commit not in valid_types:
+        sys.exit(
+            f"{RED}[TypeError]{RESET} Invalid type '{type_in_commit}' for commit\n"
+            + f"Valid types are {','.join(valid_types)}"
+        )
+
+    scopes_in_commit = structure_match.group(2)
+    if scopes_in_commit is not None:
+        if type_in_commit in ["build", "learn"]:
+            sys.exit(f"{RED}[ScopeError]{RESET} <type> '{type_in_commit}' accepts no scope")
+
+        # <scope> has a shape (lex,parse)
+        scopes = scopes_in_commit[1 : len(scopes_in_commit) - 1].split(",")
+        nscopes = len(scopes)
+        valid_scopes = [
+            "lex",
+            "parse",
+            "ast",
+            "check",
+            "codegen",
+            "interp",
+            "rt",
+            "arena",
+            "cli",
+            "diag",
+            "test",
+            "spec",
+        ]
+        err_msg: list[str] = []
+
+        if nscopes > 2:
+            err_msg.append(f"  * Too many scopes. Got {nscopes}, expected at most 2")
+
+        invalid = [s for s in scopes if s not in valid_scopes]
+        if invalid:
+            err_msg.append(
+                f"  * Invalid scopes found, {invalid}\n"
+                + f"    Valid scopes are {','.join(valid_scopes)}"
             )
 
-        scopes = structure_match.group(2)
-        nscopes = len(scopes.split(","))
-        if scopes and nscopes > 2:
-            msg.append(f"Too many scopes. At most 2 scopes, got {scopes}")
+        valid = [s for s in scopes if s in valid_scopes]
+        if type_in_commit == "test" and "test" in valid:
+            err_msg.append(
+                f"  * <scope> 'test' is redundant for <type> '{type_in_commit}'; test(test,...)"
+            )
 
-        if msg:
-            msg.insert(0, "[MsgError] Following issue(s) spotted in commit message")
-            msg.append("See COMMITS.md for more info")
-            sys.exit("\n".join(msg))
+        dupes = [(k, v) for k, v in Counter(valid).items() if v > 1]
+        if dupes:
+            err_msg.append(f"  * Duplicate scopes found (<scope>, <N>), {dupes}")
+
+        if err_msg:
+            err_msg.insert(
+                0, f"{RED}[MsgError]{RESET} Following issue(s) spotted in commit message"
+            )
+            err_msg.append("See COMMITS.md for more info")
+            sys.exit("\n".join(err_msg))
 
 
 elif proc.returncode == 0:
     patterns = [
-        RegexCommitType.MERGE_GENERAL.value,
-        RegexCommitType.MERGE_LEARN.value,
-        RegexCommitType.MERGE_TOOL.value,
+        REGEX_MERGE_GENERAL,
+        REGEX_MERGE_LEARN,
+        REGEX_MERGE_TOOL,
     ]
     for pattern in patterns:
         regex = re.compile(pattern)
@@ -104,11 +185,14 @@ elif proc.returncode == 0:
             break
     else:
         sys.exit(
-            "[PatternError] Expected one of the following patterns for subject:\n"
-            + "\tm<N>/<branch-name>: content          # For merges related towards kramac milestone number `N`"
-            + "\tlearn/<topic>/<subtopic>: content    # For merges related to learning (ground-up)"
-            + "\ttool/<tool-name>: content            # Merges related to tool updates"
-            + "See COMMITS.md for more info"
+            f"{RED}[PatternError]{RESET} Expected one of the following patterns for subject:\n"
+            + "\tm<N>/<branch-name>: content          # For merges related towards kramac milestone number `N`\n"
+            + "\tlearn/<topic>/<subtopic>: content    # For merges related to learning (ground-up)\n"
+            + "\ttool/<tool-name>: content            # Merges related to tool updates\n\n"
+            + "Note:\n"
+            + "-----\n"
+            + "  * Subject should not end in a terminating punctuation [. , : ; ? !]\n\n"
+            + "See COMMITS.md for more info\n"
         )
 else:
     sys.exit(f"Unhandled error (exit code {proc.returncode}) while running:\n\t{command}")
