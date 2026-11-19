@@ -387,19 +387,21 @@ refactor(parse): extract operand loop from additive and multiplicative
   automating a process that has not settled tends to enforce the wrong thing.
 -->
 
-- **`commit-msg` hook** validating the format. A script reading its one argument, the message file,
-  and matching the subject line against four patterns:
-  - ordinary commits — type mandatory, scope optional:
-    `^(feat|fix|refactor|test|docs|build|perf|chore|learn)(\([a-z]+(,[a-z]+)?\))?: .+$`
-  - merge commits — branch-name label:
-    `^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .+$`
-  - learning merge commits:
-    `^learn/[a-z0-9-]+/[a-z0-9-]+: .+$`
-  - tool merge commits:
-    `^tool/[a-z0-9-]+: .+$`
+- **`commit-msg` hook** validating the format, at `tools/hooks/commit-msg`. A script reading its one
+  argument, the message file. It finds the subject the way git's default cleanup does, then decides
+  what kind of commit it is from git's state, never from the subject's shape: a merge is in
+  progress when `MERGE_HEAD` exists.
+  - ordinary commits — structure first, `<type>[(<scope>[,<scope>])]: <subject>`; then the rules
+    this document states: the type is in *Types*; each scope is in *Scopes*; at most two scopes,
+    none repeated; no scope on `build` or `learn`; no `test` scope on a `test` commit. The tables
+    are the rule. The hook holds a copy of them, kept in step by hand.
+  - merge commits — the label matches one of:
+    - milestone: `^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .+$`
+    - learning: `^learn/[a-z0-9-]+/[a-z0-9-]+: .+$`
+    - tool: `^tool/[a-z0-9-]+: .+$`
 
-  Length checked separately against the 50/72 limits. Roughly twenty lines, and a legitimate aim-2
-  exercise. Without the merge patterns the hook rejects every merge.
+  Length checked separately against the 50/72 limits. Without the merge patterns the hook rejects
+  every merge.
 
 - **`pre-commit` hook: keep it fast.** Build and format check only. Once a hook takes fifteen
   seconds, `--no-verify` becomes reflex and the enforcement is theatre.
