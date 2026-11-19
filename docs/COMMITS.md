@@ -396,9 +396,11 @@ refactor(parse): extract operand loop from additive and multiplicative
     none repeated; no scope on `build` or `learn`; no `test` scope on a `test` commit. The tables
     are the rule. The hook holds a copy of them, kept in step by hand.
   - merge commits — the label matches one of:
-    - milestone: `^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .+$`
-    - learning: `^learn/[a-z0-9-]+/[a-z0-9-]+: .+$`
-    - tool: `^tool/[a-z0-9-]+: .+$`
+    - milestone: `m<N>/<stage>[,<stage>]: <subject>`
+    - learning: `learn/<topic>/<packet>: <subject>`
+    - tool: `tool/<tool-name>: <subject>`
+  - Rejects trailing sentence punctuation, leaves lowercase-after-colon and imperative mood to the
+    author
 
   Length checked separately against the 50/72 limits. Without the merge patterns the hook rejects
   every merge.
