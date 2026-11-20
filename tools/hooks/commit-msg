@@ -74,16 +74,16 @@ proc = subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, check=False
 #
 # For invalid subjects:
 #     foo bar                        -- No <type> or <scope>
-REGEX_ORDINARY = r"^(\w+)(\(\w+(,\w+)*\))?: .*[^.,:;?!]$"
+REGEX_ORDINARY = r"^(\w+)(\(\w+(,\w+)*\))?: (\S.*)?[^.,:;?!]$"
 
 # The merge commit subject structure for milestone track e.g., - m1/arena
-REGEX_MERGE_GENERAL = "^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: .*[^.,:;?!]$"
+REGEX_MERGE_GENERAL = r"^m[0-9]+/[a-z0-9-]+(,[a-z0-9-]+)?: (\S.*)?[^.,:;?!]$"
 
 # The merge commit subject structure for learn track e.g., learn/git/hooks
-REGEX_MERGE_LEARN = "^learn/[a-z0-9-]+/[a-z0-9-]+: .*[^.,:;?!]$"
+REGEX_MERGE_LEARN = r"^learn/[a-z0-9-]+/[a-z0-9-]+: (\S.*)?[^.,:;?!]$"
 
 # The merge commit subject structure for tool track e.g., tool/commit-msg
-REGEX_MERGE_TOOL = "^tool/[a-z0-9-]+: .*[^.,:;?!]$"
+REGEX_MERGE_TOOL = r"^tool/[a-z0-9-]+: (\S.*)?[^.,:;?!]$"
 
 
 if proc.returncode == 1:
@@ -91,7 +91,7 @@ if proc.returncode == 1:
     structure_match = regex.fullmatch(subject)
     if structure_match is None:
         sys.exit(
-            f"{RED}[PatternError]{RESET} Expected pattern for subject:\n"
+            f"{RED}[PatternError]{RESET} For ordinary commits, expected pattern for subject:\n"
             + "\t<type>(<scope>): content\n\n"
             + "Examples:\n"
             + "---------\n"
@@ -99,6 +99,7 @@ if proc.returncode == 1:
             + "  * test(lex,parse): validate fail cases\n\n"
             + "Note:\n"
             + "-----\n"
+            + "  * <scope>s are comma seperated with no spaces in between\n"
             + "  * Subject should not end in a terminating punctuation [. , : ; ? !]\n\n"
             + "See COMMITS.md for more info"
         )
@@ -114,9 +115,10 @@ if proc.returncode == 1:
         "chore",
         "learn",
     ]
+    err_msg: list[str] = []
     type_in_commit = structure_match.group(1)
     if type_in_commit not in valid_types:
-        sys.exit(
+        err_msg.append(
             f"{RED}[TypeError]{RESET} Invalid type '{type_in_commit}' for commit\n"
             + f"Valid types are {','.join(valid_types)}"
         )
@@ -124,6 +126,8 @@ if proc.returncode == 1:
     scopes_in_commit = structure_match.group(2)
     if scopes_in_commit is not None:
         if type_in_commit in ["build", "learn"]:
+            # A direct `exit` is ok here because the <type> is valid so `err_msg`
+            # is always `[]` at this point and there is nothing to accumulate
             sys.exit(f"{RED}[ScopeError]{RESET} <type> '{type_in_commit}' accepts no scope")
 
         # <scope> has a shape (lex,parse)
@@ -143,35 +147,38 @@ if proc.returncode == 1:
             "test",
             "spec",
         ]
-        err_msg: list[str] = []
-
+        scope_errors: list[str] = []
         if nscopes > 2:
-            err_msg.append(f"  * Too many scopes. Got {nscopes}, expected at most 2")
+            scope_errors.append(f"  * Too many scopes. Got {nscopes}, expected at most 2")
 
         invalid = [s for s in scopes if s not in valid_scopes]
         if invalid:
-            err_msg.append(
-                f"  * Invalid scopes found, {invalid}\n"
-                + f"    Valid scopes are {','.join(valid_scopes)}"
+            scope_errors.append(
+                f"  * Invalid scope(s) found - {', '.join(invalid)}\n"
+                + f"    Valid scopes are {', '.join(valid_scopes)}"
             )
 
         valid = [s for s in scopes if s in valid_scopes]
         if type_in_commit == "test" and "test" in valid:
-            err_msg.append(
+            scope_errors.append(
                 f"  * <scope> 'test' is redundant for <type> '{type_in_commit}'; test(test,...)"
             )
 
         dupes = [(k, v) for k, v in Counter(valid).items() if v > 1]
         if dupes:
-            err_msg.append(f"  * Duplicate scopes found (<scope>, <N>), {dupes}")
+            dupes = [f"{s}({n})" for s, n in dupes]
+            scope_errors.append(f"  * Duplicate scopes found: {', '.join(dupes)}")
 
-        if err_msg:
-            err_msg.insert(
-                0, f"{RED}[MsgError]{RESET} Following issue(s) spotted in commit message"
+        if scope_errors:
+            scope_errors.insert(
+                0,
+                f"{RED}[ScopeError]{RESET} The following error(s) were identified in <scope>(s)",
             )
-            err_msg.append("See COMMITS.md for more info")
-            sys.exit("\n".join(err_msg))
+            err_msg.extend(scope_errors)
 
+    if err_msg:
+        err_msg.append("\nSee COMMITS.md for more info")
+        sys.exit("\n".join(err_msg))
 
 elif proc.returncode == 0:
     patterns = [
@@ -185,7 +192,7 @@ elif proc.returncode == 0:
             break
     else:
         sys.exit(
-            f"{RED}[PatternError]{RESET} Expected one of the following patterns for subject:\n"
+            f"{RED}[PatternError]{RESET} For merge commits, expected one of the following patterns for subject:\n"
             + "\tm<N>/<branch-name>: content          # For merges related towards kramac milestone number `N`\n"
             + "\tlearn/<topic>/<subtopic>: content    # For merges related to learning (ground-up)\n"
             + "\ttool/<tool-name>: content            # Merges related to tool updates\n\n"
