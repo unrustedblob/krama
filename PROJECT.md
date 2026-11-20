@@ -60,6 +60,8 @@ Then, after `tool/commit-hook`:
 | `tests/harness/kramat.py` — repository root | Taken as two levels above the driver file | Revisit if the layout changes (`krama-notes-19` §5.4) — the `story/` move is the likely trigger |
 | `tests/harness/kramat.py` — per-case timeout | Absent; a hanging case stalls the run | A hang is loud, not silent. Add one on the first hang (`krama-notes-19` §7) |
 | `tests/harness/kramat.py` — stdout | Unchecked under `expected = "#none"`, and `main` still dumps the file | stdout gets real coverage with `.expected` files; the dump goes with the lexer (`krama-notes-18` §7.4) |
+| `tools/hooks/commit-msg` — `fixup!`, `squash!`, `amend!` | Rejected: the structural check does not know the prefixes, though COMMITS.md Rule 3 recommends `--fixup` with `--autosquash`. Use `--no-verify` for the marker commit, or plain `rebase -i` | Accept the three as local-only markers, like `wip`, when the workflow first needs them; `pre-push` refuses them either way |
+| `tools/hooks/commit-msg` — `Revert "…"` | Rejected: COMMITS.md states no rule for reverts | Decide the subject form, and whether git's own is kept, when the first revert is needed |
 
 ---
 

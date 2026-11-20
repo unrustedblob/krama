@@ -73,6 +73,7 @@ Refs: D-014
 | `perf` | Measured performance change — not speculative |
 | `chore` | Housekeeping with no source effect (.gitignore, file moves) |
 | `learn` | Work under `learn/` — packets, exercises, summaries, ledger rows |
+| `wip` | Local-only work in progress. Never pushed — `reset --soft` or squash it into logical commits first (see *Pushing*) |
 
 `refactor` means behavior is unchanged and tests are untouched. If tests changed, it is `feat` or
 `fix`.
@@ -401,6 +402,8 @@ refactor(parse): extract operand loop from additive and multiplicative
     - tool: `tool/<tool-name>: <subject>`
   - Rejects trailing sentence punctuation, leaves lowercase-after-colon and imperative mood to the
     author
+  - Accepts `wip: <anything>` once the structure matches, with no type or scope checks: a `wip`
+    commit is never pushed, and `pre-push` refuses it
 
   Length checked separately against the 50/72 limits. Without the merge patterns the hook rejects
   every merge.
