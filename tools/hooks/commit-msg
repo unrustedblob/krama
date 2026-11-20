@@ -7,10 +7,10 @@
 #   3. The subject's line length
 #   4. For ordinary commits, the structure and then the types and scopes against
 #      COMMITS.md's tables (copied here, manual sync)
-#   5. For merge commits (MERGE_HEAD) available, the label against the 3 merge
-#      patterns
-#      Note: Only validates the pattern for merge commits not if the pattern
-#      correctly refers to the intended merge
+#   5. For merge commits (MERGE_HEAD) available, verfiy only one branch is being
+#      merged (as stated in COMMITS.md), check the label against the 3 merge
+#      patterns and that the label matches the branch name (or any one of htem
+#      in case multiple branches point to the same hash)
 
 import os
 import re
@@ -99,7 +99,7 @@ if proc.returncode == 1:
             + "  * test(lex,parse): validate fail cases\n\n"
             + "Note:\n"
             + "-----\n"
-            + "  * <scope>s are comma seperated with no spaces in between\n"
+            + "  * <scope>s are comma separated with no spaces in between\n"
             + "  * Subject should not end in a terminating punctuation [. , : ; ? !]\n\n"
             + "See COMMITS.md for more info"
         )
@@ -181,6 +181,26 @@ if proc.returncode == 1:
         sys.exit("\n".join(err_msg))
 
 elif proc.returncode == 0:
+    # Check in case multiple branches are being merged at once. MERGE_HEAD
+    # stores each commit hash per line and `--points-at MERGE_HEAD` uses only
+    # the first one. Checking the number of lines is enough since per COMMITS.md
+    # only one branch may be merged at a time
+    command = "git rev-parse --git-path MERGE_HEAD"
+    proc = subprocess.run(command.split(" "), capture_output=True, check=False, text=True)
+    if proc.returncode:
+        sys.exit(
+            f"{RED}[UnhandledError]{RESET} Command exited with code {proc.returncode}\n"
+            + f"Executed: {command}"
+        )
+
+    path_merge_head = proc.stdout.strip()
+    try:
+        with open(path_merge_head, "r") as f:
+            if len(f.readlines()) > 1:
+                sys.exit(f"{RED}[MultiMergeError]{RESET} Merge one branch at a time")
+    except OSError as e:
+        sys.exit(f"Error opening MERGE_HEAD\n{e}")
+
     patterns = [
         REGEX_MERGE_GENERAL,
         REGEX_MERGE_LEARN,
@@ -188,7 +208,8 @@ elif proc.returncode == 0:
     ]
     for pattern in patterns:
         regex = re.compile(pattern)
-        if regex.fullmatch(subject) is not None:
+        structure_match = regex.fullmatch(subject)
+        if structure_match is not None:
             break
     else:
         sys.exit(
@@ -201,5 +222,31 @@ elif proc.returncode == 0:
             + "  * Subject should not end in a terminating punctuation [. , : ; ? !]\n\n"
             + "See COMMITS.md for more info\n"
         )
+
+    # Check if the commit label (part before the first `:`) matches any one of
+    # the branches pointing to the same commit hash. Given the multiple merge
+    # check above, at this point there is only one commit hash in MERGE_HEAD so
+    # the `points-at` use here is safe
+    command = "git for-each-ref --points-at MERGE_HEAD --format=%(refname:short) refs/heads/"
+    proc = subprocess.run(command.split(" "), capture_output=True, check=False, text=True)
+    if proc.returncode:
+        sys.exit(
+            f"{RED}[UnhandledError]{RESET} Command exited with code {proc.returncode}\n"
+            + f"Executed: {command}"
+        )
+
+    branch_name = proc.stdout.strip().split("\n")
+    if branch_name == [""]:
+        sys.exit(f"{RED}[BranchError]{RESET} No branch points to the commit being merged")
+
+    commit_label = structure_match[0].split(":")[0]
+    if commit_label not in branch_name:
+        sys.exit(
+            f"{RED}[LabelError]{RESET} Commit label should match branch name."
+            + f" Got {commit_label}, expected one of {', '.join(branch_name)}"
+        )
+
 else:
-    sys.exit(f"Unhandled error (exit code {proc.returncode}) while running:\n\t{command}")
+    sys.exit(
+        f"{RED}[UnhandledError]{RESET} Exit code {proc.returncode} while running:\n\t{command}"
+    )
