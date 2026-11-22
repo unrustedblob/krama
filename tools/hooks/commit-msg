@@ -104,6 +104,10 @@ if proc.returncode == 1:
             + "See COMMITS.md for more info"
         )
 
+    type_in_commit = structure_match.group(1)
+    if type_in_commit == "wip":
+        sys.exit(0)
+
     valid_types = [
         "feat",
         "fix",
@@ -116,7 +120,6 @@ if proc.returncode == 1:
         "learn",
     ]
     err_msg: list[str] = []
-    type_in_commit = structure_match.group(1)
     if type_in_commit not in valid_types:
         err_msg.append(
             f"{RED}[TypeError]{RESET} Invalid type '{type_in_commit}' for commit\n"
@@ -130,7 +133,8 @@ if proc.returncode == 1:
             # is always `[]` at this point and there is nothing to accumulate
             sys.exit(f"{RED}[ScopeError]{RESET} <type> '{type_in_commit}' accepts no scope")
 
-        # <scope> has a shape (lex,parse)
+        # <scope> has shape (lex,parse), only 2 scopes allowed, comma separated
+        # and no sapce in between
         scopes = scopes_in_commit[1 : len(scopes_in_commit) - 1].split(",")
         nscopes = len(scopes)
         valid_scopes = [
