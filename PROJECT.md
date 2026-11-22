@@ -10,21 +10,22 @@
 **Milestone:** 1 single `main`, three scalar types, arithmetic, `@print` — to be descoped (see
 Next up)
 
-**Working on:** `tool/commit-hook` — the `commit-msg` and `pre-push` hooks, in Python under
-`tools/` (STYLE.md §3.1), written by the programmer in six small steps. COMMITS.md gains tool
-branches and the fourth merge pattern, and its `pre-push` note is corrected: the commits leaving the
-machine are those reachable from the local SHA and from none of the remote's tracking refs, not
-`main..local`. `ground-up` is merged
+**Working on:** `tool/commit-hook`, step 6 — the `pre-push` hook, in Python under `tools/hooks/`
+(STYLE.md §3.1), written by the programmer. `commit-msg` is complete for steps 1–5 (`441d65c`,
+`krama-notes-23`). `pre-push` refuses outgoing `wip`, `fixup!`, `squash!` and `amend!` subjects,
+over the commits reachable from the local SHA and from none of the remote's tracking refs.
+`ground-up` is merged
 
 **Blocked on:** -
 
 **Last green:** 39/39 unit tests passing under `make check`, clean under the §12 flags and under
 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`. The harness is not in the gate
 
-**Next up:** Step 1 of the hooks — a `commit-msg` that prints the first line and exits 0, wired
-through `core.hooksPath`. Still to confirm from the `ground-up` merge: the D-041 issue shows
-`closed`; the remote branch is deleted; r001's #17–#20 are closed (the comma-listed `Closes:`
-closed only #16, `aside-notes-06`).
+**Next up:** `pre-push` pseudocode — the stdin loop, the four fields, the deletion skip, the
+outgoing range and the subject check. Before the merge: r003 for everything after `0380a11`, and
+the close-out edits in `krama-notes-23` §14. Still to confirm from the `ground-up` merge: the
+D-041 issue shows `closed`; the remote branch is deleted; r001's #17–#20 are closed (the
+comma-listed `Closes:` closed only #16, `aside-notes-06`).
 
 **Paused packet:** `git/remote-tracking` (score 5) — the lab in `learn/git/remote-tracking/README.md`,
 accepted 2026-10-21 and put on hold 2026-10-23. Nothing waits on it now that D-041 answered Rule 4's
@@ -53,7 +54,7 @@ Then, after `tool/commit-hook`:
 | `tests/unit_tests/test_arena.c` — test 2 capacity check | Compares against the initial capacity, not the current one | Passes regardless of cursor movement. Left until the milestone 2 arena revision (D-027, D-028) rewrites the fixture anyway |
 | `Makefile` — `make test` | Builds the test binary, does not run it | `check` runs the binary directly meanwhile. Revisit when the `.krm`/`.expected` pairs land and `test` gains a runner |
 | `tests/` — output volume | Full per-assertion output on every run | A quiet mode reducing a pass to `N / Total Passed` would make a full gate run read as a short checklist. Cosmetic until the corpus grows |
-| Hooks — `commit-msg`, `pre-commit`, `pre-push` | Absent | COMMITS.md carries the intended shape. `commit-msg` and `pre-push` are in progress on `tool/commit-hook`; `pre-commit` waits until the first two are habitual |
+| Hooks — `pre-commit`, `pre-push` | `commit-msg` is built (`tools/hooks/commit-msg`); `pre-push` is in progress on `tool/commit-hook`; `pre-commit` is absent | COMMITS.md carries the intended shape. `pre-commit` waits until the other two are habitual |
 | `tests/unit_tests/test_arena.c` - `CHECK` macro | Potentially could be a function wrapped in a macro | Per STYLE.md's §8.4 a macro should only be used for the listed use cases, the `CHECK` macro can effectively be replaced by a function, deferring this till the next unit test as at that point it's possible `CHECK` would move to its own file |
 | `src/main.c` — argument contract | **Untested.** The harness validates manifests but has no runner, no fixtures, and is not in `make check`; commit 4's one-commit window stays open | The harness-remainder branch, after the descope. The fixtures need the new syntax |
 | `tests/harness/kramat.py` — header parser | Light: no enum scoping, no rejection of unknown lines inside the enum, no trailing comments. A misspelled enumerator compiles and silently shifts later values | Closed by the `--dump-exit-codes` cross-check, #21 (D-039). `exit_codes.h`'s header comment states the format rules meanwhile |

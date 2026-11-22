@@ -415,9 +415,9 @@ refactor(parse): extract operand loop from additive and multiplicative
   commits leaving the machine — everything reachable from the local SHA and from none of the
   remote's tracking refs (`git rev-list <local> --not --remotes=<remote>`), one rule for new and
   existing branches alike; a deletion (local SHA all zeros) sends nothing and is skipped — and refuse
-  any starting `wip`, `fixup!` or `squash!`. Not `main..local`: it misses commits whenever local
-  `main` is ahead of the remote's. Milliseconds per push. Not `make check` — a slow hook
-  trains `--no-verify`.
+  any starting `wip`, `fixup!`, `squash!` or `amend!`. Not `main..local`: it misses commits
+  whenever local `main` is ahead of the remote's. Milliseconds per push. Not `make check` — a slow
+  hook trains `--no-verify`.
 
 - **Tag milestone completions** — `git tag v0.1-milestone1`. Gives a stable reference for "the
   language as specified in v1."
