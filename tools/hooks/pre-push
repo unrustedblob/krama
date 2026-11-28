@@ -1,0 +1,34 @@
+#! /usr/bin/env python3
+
+import subprocess
+import sys
+
+REMOTE = sys.argv[1]
+NUL_HASH = "0" * 40
+
+outgoing: list[tuple[str, str, str]] = []
+for line in sys.stdin:
+    local_hash = line.strip().split(" ")[1]
+    if local_hash == NUL_HASH:
+        continue
+
+    command = f"git rev-list --pretty=oneline {local_hash} --not --remotes={REMOTE}"
+    proc = subprocess.run(command.split(" "), capture_output=True, check=False, text=True)
+    info = proc.stdout.rstrip()
+
+    local_ref = line.strip().split(" ")[0]
+    for record in info.splitlines():
+        hash, _, subject = record.partition(" ")
+        outgoing.append((local_ref, hash, subject))
+
+invalid_prefixes = ("wip", "fixup!", "squash!", "amend!")
+errors: list[str] = []
+for record in outgoing:
+    p = next((p for p in invalid_prefixes if record[2].startswith(p)), None)
+    if p is not None:
+        errors.append(f"In {record[0]} commit {record[1][:7]} {record[2]}, found {p}")
+
+if errors:
+    errors.insert(0, "[PushError] Following issue(s) found in commit(s)")
+    errors.append("Use `reset --soft` or `rebase -i` to correct before push")
+    sys.exit("\n".join(errors))
